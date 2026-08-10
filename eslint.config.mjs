@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Bundled Cursor IDE tooling/skills, not project source.
+    ".cursor/**",
+    // Convex codegen — regenerated automatically, never hand-edited.
+    "convex/_generated/**",
   ]),
 ]);
 

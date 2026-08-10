@@ -8,7 +8,7 @@ The new platform will support:
 
 - A public-facing real estate website
 - Property and project listings
-- Lead and inquiry collection
+- Lead and inquiry collection — split by source: the general Contact page uses an embedded GoHighLevel form (see "GoHighLevel" below), while property/project-specific inquiries are stored in our own `leads` table (see "Convex data areas" below), since those need real `propertyId`/`projectId`/`agentId` foreign keys to power the admin Leads screen and Agent Portal
 - Agent and developer profiles
 - Blog and SEO content
 - A secure internal admin dashboard
@@ -95,9 +95,10 @@ React Hook Form will manage complex forms such as:
 - Property creation and editing
 - Project creation and editing
 - Agent profiles
-- Lead forms
-- Contact forms
+- Property/project inquiry ("Contact this agent about this listing") forms — a Convex mutation writes into the `leads` table
 - Website settings
+
+The public Contact page's general form is the one exception — it's an embedded GoHighLevel form (see "GoHighLevel" below), not a React Hook Form + Convex form.
 
 ### Zod
 
@@ -134,12 +135,37 @@ Possible Convex data areas include:
 - Projects
 - Developers
 - Agents
-- Leads
+- Communities (country-aware — see `docs/superpowers/specs/2026-08-08-communities-and-media-model.md`)
+- Leads (property/project inquiries only — not the general Contact page, which uses GoHighLevel; see "GoHighLevel" below)
+- Property submissions
 - Blog posts
 - Website settings
-- Media records
+- Media items (unified table, foreign-keyed to any entity — same spec above)
 - Users and roles
 - Audit logs
+
+---
+
+## GoHighLevel (Contact Page Only)
+
+GoHighLevel (GHL) is used **only** for the general public Contact page —
+nowhere else. It embeds GHL's provided form snippet (script/iframe embed)
+client-side; submissions go straight to GoHighLevel. There is no Convex
+mutation, no `leads` table row, and no server-side spam handling on our end
+for this specific form — GHL's hosted form handles its own submission
+processing and spam protection.
+
+Every other lead-capture point — property inquiries, project inquiries, any
+"Contact this agent about this listing" CTA — is **not** GHL. Those go
+through our own `leads` table (see "Convex data areas" above) via a Convex
+mutation, because they need real `propertyId`/`projectId`/`agentId` foreign
+keys to power the admin Leads screen and the Agent Portal's assigned-leads
+view — data a generic external form has no way to carry natively.
+
+GHL workflows/automations do support an outbound webhook action that could
+also forward Contact-page submissions into Convex later, if we ever want a
+single unified inbox across both sources. This is **explicitly deferred**
+— see the Backlog in `PLAN.md` — until a concrete need arises.
 
 ---
 
@@ -150,7 +176,7 @@ Possible Convex data areas include:
 Clerk will manage:
 
 - Authentication
-- Admin sign-in
+- Admin, Agent, and Client sign-in
 - User sessions
 - User identity
 - Account security
@@ -158,14 +184,60 @@ Clerk will manage:
 
 Authorization must also be enforced inside Convex functions. Hiding admin controls in the interface alone is not sufficient.
 
-Possible roles include:
+Roles:
 
 - Super Admin
 - Admin
-- Property Manager
-- Content Editor
-- Agent
-- Viewer
+- Agent (has portal access)
+- Client (has portal access)
+
+Clerk is not admin-only. Agent and Client accounts authenticate through the
+same Clerk instance, scoped by role — see "Roles, Portals, and Property
+Submissions" below. (This replaces an earlier 6-role list that included
+Property Manager, Content Editor, and Viewer as separate roles; see
+`docs/superpowers/specs/2026-08-07-roles-and-portals-design.md`.)
+
+---
+
+## Roles, Portals, and Property Submissions
+
+Full design detail: `docs/superpowers/specs/2026-08-07-roles-and-portals-design.md`
+
+### Role Scope
+
+| Role | Scope |
+|---|---|
+| Super Admin | Full access to everything. Only role that can create/manage other Admin accounts. |
+| Admin | Full access to Properties, Projects, Developers, Agents, Blog, Leads, Media, Settings, Audit Logs. Creates Agent accounts. Assigns property submissions to Agents (or reviews them personally). |
+| Agent | Scoped to their own assigned Properties/Projects (edit rights) and leads/submissions assigned to them for review. No access to Users, Settings, Audit Logs, or other agents' records. |
+| Client | Scoped to only their own submitted properties. Can create new submissions, upload documents, and view status. No buyer-side browsing/favorites. |
+
+### Agent Portal
+
+An Agent-facing view that reuses the admin dashboard's visual style and
+components (`DataTable`, shell layout) rather than a separate design system.
+Shows the Agent's own assigned Properties/Projects, property/project
+inquiry leads assigned to them, and property submissions assigned to them
+for review (with approve/reject actions). Contact-page inquiries are not
+shown here — those live in GoHighLevel, not Convex (see "GoHighLevel"
+above).
+
+### Client Portal — "List Your Property"
+
+A public-facing "List Your Property" call-to-action leads property owners
+into Clerk sign-up/sign-in, then a submission form (property details +
+supporting documents such as title deed, floor plan, photos). Submissions
+are reviewed by an Admin or assigned Agent before becoming a live
+`properties` record. Clients can log back in anytime to check submission
+status and submit additional properties later.
+
+Property submissions are modeled as their own `propertySubmissions` table
+(see Convex data areas above) — distinct from `leads`, which are
+buyer-inquiry-only (property/project inquiries; the general Contact page is
+handled separately via GoHighLevel, not Convex — see "GoHighLevel" above).
+
+Both portals live outside `[locale]` (English-only), matching the admin
+dashboard's pattern rather than the translated public site.
 
 ---
 
@@ -293,7 +365,7 @@ Cloudinary is not required initially. It may be considered later if advanced tra
 
 ## Email and Notifications (NOT TO BE IMPLEMENTED FOR NOW)
 
-### Resend
+### Resend (NOT TO BE IMPLEMENTED FOR NOW)
 
 Resend may be used for:
 
@@ -355,7 +427,8 @@ Next.js Application
 │   ├── Agents
 │   ├── About
 │   ├── Blog
-│   └── Contact
+│   ├── Contact
+│   └── List Your Property (Client Portal entry point)
 │
 ├── Admin Dashboard
 │   ├── Dashboard Overview
@@ -363,12 +436,21 @@ Next.js Application
 │   ├── Projects
 │   ├── Developers
 │   ├── Agents
-│   ├── Leads
+│   ├── Leads (property/project inquiries)
 │   ├── Blog
 │   ├── Media
 │   ├── Users and Roles
 │   ├── Website Settings
 │   └── Audit Logs
+│
+├── Agent Portal
+│   ├── Assigned Properties/Projects
+│   ├── Assigned Leads
+│   └── Assigned Submissions (review)
+│
+├── Client Portal
+│   ├── Submit Property
+│   └── Submission Status
 │
 ├── Clerk
 │   ├── Authentication
@@ -382,6 +464,9 @@ Next.js Application
 │   ├── Actions
 │   ├── Scheduled Functions
 │   └── Authorization
+│
+├── GoHighLevel (embedded form only, external system — Contact page only)
+│   └── Lead capture + CRM (Contact page general inquiries)
 │
 └── Vercel
     ├── Hosting
@@ -788,11 +873,216 @@ The SEO stack includes:
 - Dynamic Sitemap
 - Robots configuration
 - Canonical URL management
+- Multi-locale routing
+- Locale-aware metadata and hreflang
+- Arabic RTL support
+- Locale-aware formatting
 - Google Analytics 4
 - Vercel Analytics
 - Vercel Speed Insights
 
 A separate SEO package is not required initially.
+
+
+---
+
+## Internationalization and Multi-Locale Architecture
+
+The website will support multiple locales, beginning with:
+
+- English (`en`)
+- Arabic (`ar`)
+- Turkish (`tr`)
+
+Additional locales may be added later.
+
+### Recommended Route Structure
+
+```text
+app/
+├── favicon.ico
+├── icon.png
+├── apple-icon.png
+├── globals.css
+├── layout.tsx
+├── robots.ts
+├── sitemap.ts
+└── [locale]/
+    ├── layout.tsx
+    ├── page.tsx
+    ├── properties/
+    ├── projects/
+    ├── communities/
+    ├── developers/
+    ├── blog/
+    └── contact/
+```
+
+Global files such as the favicon, robots file, sitemap, and application icons must remain outside the `[locale]` folder.
+
+### Locale Configuration
+
+```ts
+export const locales = ["en", "ar", "tr"] as const;
+export type Locale = (typeof locales)[number];
+export const defaultLocale: Locale = "en";
+```
+
+Reuse this configuration for routing, metadata, sitemap generation, language switching, translation loading, and validation.
+
+### Translation System
+
+Use one translation system consistently. A suitable option is `next-intl`.
+
+```text
+messages/
+├── en.json
+├── ar.json
+└── tr.json
+```
+
+Translations should cover navigation, forms, validation messages, listing labels, filters, admin text, metadata, and relevant email templates.
+
+### Locale Middleware or Proxy
+
+Locale routing must exclude static and metadata files.
+
+```ts
+export const config = {
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|robots.txt|sitemap.xml|manifest.webmanifest|.*\\..*).*)",
+  ],
+};
+```
+
+The favicon must remain available at:
+
+```text
+/favicon.ico
+```
+
+It must not redirect to `/en/favicon.ico` or another locale-specific path.
+
+### Locale Layout
+
+The locale layout should set language and direction:
+
+```tsx
+<html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"}>
+```
+
+Arabic support requires full RTL testing, not only translated text.
+
+### Localized Metadata
+
+Each locale should have localized titles, descriptions, Open Graph content, canonicals, and alternate-language URLs.
+
+```tsx
+alternates: {
+  canonical: `/${locale}`,
+  languages: {
+    en: "/en",
+    ar: "/ar",
+    tr: "/tr",
+    "x-default": "/en",
+  },
+}
+```
+
+Each locale page should normally use a self-referencing canonical and reference all available translations.
+
+### Multi-Locale Sitemap
+
+The sitemap should include every published canonical locale URL.
+
+Only include translations that actually exist and are published. Do not create sitemap entries for incomplete translations.
+
+### Convex Content Model
+
+Keep shared property facts separate from translated marketing content.
+
+Shared facts:
+
+- Price
+- Bedrooms
+- Bathrooms
+- Area
+- Coordinates
+- Status
+- Amenities
+- Country code (ISO 3166-1 alpha-2 — e.g. `AE`, `TH`)
+
+Translated content:
+
+- Title
+- Description
+- SEO title
+- SEO description
+- Image alternative text
+- City / community display name (e.g. "Dubai" / "دبي")
+
+Example:
+
+```ts
+type LocalizedText = {
+  en: string;
+  ar?: string;
+  tr?: string;
+};
+```
+
+Images are not embedded on the entity itself — each image is a row in the
+unified `mediaItems` table, foreign-keyed to its entity (`entityType` +
+`entityId`) and ordered via an index, per
+`docs/superpowers/specs/2026-08-08-communities-and-media-model.md`. This
+avoids the unbounded-array-on-a-document problem (1MB document limit,
+full-document rewrite on every reorder) that embedding a `MediaItem[]` field
+directly would cause.
+
+### Language Switcher
+
+The language switcher should preserve the current page when a translation exists and fall back to the locale homepage when it does not.
+
+### RTL Requirements
+
+Use logical CSS properties where possible:
+
+```css
+margin-inline-start
+margin-inline-end
+padding-inline-start
+padding-inline-end
+inset-inline-start
+inset-inline-end
+```
+
+Review directional icons, breadcrumbs, sliders, forms, tables, pagination, cards, and animation direction.
+
+### Locale-Aware Formatting
+
+Use the JavaScript `Intl` API for currency, numbers, dates, time, area measurements, and pluralization.
+
+```ts
+new Intl.NumberFormat(locale, {
+  style: "currency",
+  currency: "AED",
+  maximumFractionDigits: 0,
+}).format(price);
+```
+
+### Internationalization Checklist
+
+- Keep `app/favicon.ico` outside `[locale]`
+- Exclude static and metadata files from locale middleware
+- Define locales centrally
+- Add localized metadata
+- Add canonical and alternate-language URLs
+- Include locale URLs in the sitemap
+- Support RTL for Arabic
+- Use locale-aware formatting
+- Translate validation and interface messages
+- Prevent indexing of incomplete translations
+- Test all major pages in every locale
 
 
 ---
@@ -819,12 +1109,16 @@ A separate SEO package is not required initially.
 - Vercel Speed Insights (NOT TO BE IMPLEMENTED FOR NOW)
 - Google Analytics 4 (NOT TO BE IMPLEMENTED FOR NOW)
 - Google Search Console (NOT TO BE IMPLEMENTED FOR NOW)
-- Next.js Metadata API
+- Next.js Metadata API 
 - Dynamic `generateMetadata`
 - Structured Data / JSON-LD
 - Dynamic Sitemap
 - Robots configuration
 - Canonical URL management
+- Multi-locale routing
+- Locale-aware metadata and hreflang
+- Arabic RTL support
+- Locale-aware formatting
 
 ---
 

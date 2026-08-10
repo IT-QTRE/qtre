@@ -1,0 +1,15 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.8.75:3000
+- Environments: .env.local
+✓ Ready in 362ms
+✓ Running next.config.ts took 38ms
+
+Attention: Clerk collects telemetry data from its SDKs when connected to development instances.
+The data collected is used to inform Clerk's product roadmap.
+To learn more, including how to opt-out from the telemetry program, visit: https://clerk.com/docs/telemetry.
+
+ GET /admin 404 in 785ms (next.js: 110ms, proxy.ts: 161ms, generate-params: 355ms, application-code: 160ms)
+ GET /sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3000%2Fadmin 200 in 426ms (next.js: 345ms, proxy.ts: 9ms, application-code: 73ms)
+ GET /sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3000%2Fadmin 200 in 46ms (next.js: 9ms, proxy.ts: 13ms, application-code: 25ms)
+[?25h
