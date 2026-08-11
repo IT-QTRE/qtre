@@ -48,17 +48,48 @@ actual burgundy "Q" mark (confirmed 2026-08-07), matching `--primary`
 
 ---
 
-## `proxy.ts`'s matcher has no `/api` exclusion
+## Guard against 500s on dynamic SEO pages from missing/incomplete data
 
-Flagged by Phase 2's final whole-branch review. The old (Phase 0) matcher's
-negative-lookahead excluded both `admin` and `api`. Phase 2 moved the
-`admin` exclusion into runtime route-matching logic (`isProtectedPortalRoute`
-/`isPortalRoute` inside `clerkMiddleware()`) but didn't carry `api` along —
-harmless today since this app has no `app/api/**` routes (Convex is the
-backend, not Next.js Route Handlers), but if one is ever added, it would
-fall through to `intlMiddleware` and get incorrectly locale-prefixed
-(`/api/foo` → redirected toward `/en/api/foo`).
+Observed on a different production Next.js + Convex real estate site: a
+`FUNCTION_INVOCATION_FAILED` (500) on a dynamic detail page
+(`/en/investment/<slug>`), hit by Google Search Console's URL Inspection
+tool. The trace showed the Convex query completing successfully, then the
+function crashing anyway — the signature of `generateMetadata`/the page
+component accessing a nested optional field (e.g. `doc.seo.seoTitle.en`) on
+a document that was actually `null`/unpublished/missing that locale's text,
+without a `notFound()` guard first. A 500 to a crawler on an indexed URL is
+worse for SEO than a clean 404.
 
-- [ ] If a Next.js API route is ever added, add it to `proxy.ts`'s matcher
-  exclusions (or its own route-matcher branch) before relying on it.
-- Ties to: any future phase that adds an `app/api/**` route handler.
+Guardrails to build in when we get there (not urgent now — no dynamic
+detail pages exist yet):
+
+- [ ] Every dynamic page's data loader treats "not found" and "not
+      published" as the same single case and calls `notFound()`
+      immediately — nothing downstream may assume the doc exists.
+- [ ] Add a shared `getLocalizedText(text, locale)` helper (fallback chain:
+      requested locale → `en` → `""`) and use it everywhere instead of raw
+      `doc.title[locale]` access — only `en` is guaranteed non-empty by
+      `localizedTextValidator`.
+- [ ] `generateMetadata` never touches raw optional fields directly — routes
+      through the same fallback chain (SEO override → entity's own
+      title/description → `websiteSettings.defaultSeo` → hardcoded
+      fallback string) so a hole in one document's SEO fields can't throw.
+- [ ] JSON-LD fields derived from optional data (e.g. `datePublished` from
+      `publishedAt`) are only included when the source field actually exists.
+- [ ] QA pass (Phase 8) includes hitting a nonexistent/unpublished slug for
+      every dynamic route type and confirming a real 404, not a crash.
+
+- Ties to: `PLAN.md` Phase 5 (dynamic detail pages, `notFound()` convention)
+  and Phase 6 — SEO & Metadata (`generateMetadata`, JSON-LD)
+
+---
+
+## ~~`proxy.ts`'s matcher has no `/api` exclusion~~ — resolved
+
+Flagged by Phase 2's final whole-branch review; fixed in Phase 3 when the
+first real `app/api/**` routes (`app/api/blob/upload`, `app/api/blob/private`)
+were added. Added an `isApiRoute` route-matcher branch inside
+`clerkMiddleware()` (not the top-level negative-lookahead matcher, since
+Route Handlers that call `auth()` still need Clerk's middleware to run on
+them) that returns early before `intlMiddleware(req)` — same pattern as the
+existing `/sign-in`/`/sign-up` skip. No further action needed here.

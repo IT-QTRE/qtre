@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PERMISSION_MATRIX, RESOURCES, ROLES, can } from "./roles";
+import { ADMIN_TOGGLEABLE_RESOURCES, PERMISSION_MATRIX, RESOURCES, ROLES, can } from "./roles";
 
 describe("PERMISSION_MATRIX", () => {
   it("has an entry for every role and every resource", () => {
@@ -36,5 +36,20 @@ describe("can", () => {
   it("checks the matrix for a given role/resource/action", () => {
     expect(can("admin", "properties", "delete")).toBe(true);
     expect(can("client", "properties", "delete")).toBe(false);
+  });
+
+  it("client can now delete media (Phase 3 — scoped to their own pending submission, enforced in convex/lib/mediaAuthorization.ts, not this flat matrix)", () => {
+    expect(can("client", "mediaItems", "delete")).toBe(true);
+  });
+});
+
+describe("ADMIN_TOGGLEABLE_RESOURCES", () => {
+  it("contains every resource except propertySubmissions (no dedicated nav tab)", () => {
+    const expected = RESOURCES.filter((resource) => resource !== "propertySubmissions");
+    expect([...ADMIN_TOGGLEABLE_RESOURCES].sort()).toEqual([...expected].sort());
+  });
+
+  it("excludes propertySubmissions", () => {
+    expect(ADMIN_TOGGLEABLE_RESOURCES).not.toContain("propertySubmissions");
   });
 });

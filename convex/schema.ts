@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { localizedTextValidator } from "./lib/localizedText";
 import { seoFieldsValidator, publishingFieldsValidator } from "./lib/seoFields";
 import { mediaEntityTypeValidator } from "./lib/mediaEntityType";
-import { roleValidator } from "./lib/roles";
+import { roleValidator, resourceValidator } from "./lib/roles";
 import { propertySharedFactsValidator } from "./lib/propertyFacts";
 
 export default defineSchema({
@@ -13,6 +13,11 @@ export default defineSchema({
     name: v.string(),
     role: roleValidator,
     createdAt: v.number(),
+    // Super Admin-configured, per-account runtime override — resources
+    // listed here are hidden from the nav AND blocked server-side (via
+    // `requireRole`) for this specific user. Only ever meaningful/settable
+    // when `role === "admin"`; never affects super_admin/agent/client.
+    disabledResources: v.optional(v.array(resourceValidator)),
   })
     .index("by_token_identifier", ["tokenIdentifier"])
     .index("by_role", ["role"]),
@@ -26,7 +31,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_actor", ["actorUserId"])
-    .index("by_created_at", ["createdAt"]),
+    .index("by_created_at", ["createdAt"])
+    .index("by_resource", ["resource", "createdAt"]),
 
   developers: defineTable({
     name: localizedTextValidator,
@@ -87,13 +93,25 @@ export default defineSchema({
     startingPrice: v.optional(v.number()),
     coordinates: v.optional(v.object({ lat: v.number(), lng: v.number() })),
     amenities: v.optional(v.array(v.string())),
+    // A handful of milestones (down payment, construction stages, handover,
+    // etc.), not an open-ended log — small and bounded like `amenities`, so
+    // it stays a plain array on the document rather than its own table.
+    paymentPlan: v.optional(
+      v.array(v.object({ label: v.string(), percentage: v.number(), note: v.optional(v.string()) })),
+    ),
     seo: v.optional(seoFieldsValidator),
     publishing: publishingFieldsValidator,
+    // The Admin (never Super Admin) who created this project — Admins may
+    // only update/delete/see projects where this matches their own
+    // `users._id` (enforced in `convex/projects.ts`, not by the role
+    // matrix). Super Admin is exempt and always sees/manages everything.
+    createdBy: v.id("users"),
   })
     .index("by_developer", ["developerId"])
     .index("by_community", ["communityId"])
     .index("by_publishing_slug", ["publishing.slug"])
-    .index("by_publishing_status", ["publishing.status"]),
+    .index("by_publishing_status", ["publishing.status"])
+    .index("by_created_by", ["createdBy"]),
 
   properties: defineTable({
     ...propertySharedFactsValidator.fields,
@@ -118,13 +136,16 @@ export default defineSchema({
     sourceSubmissionId: v.optional(v.id("propertySubmissions")),
     seo: v.optional(seoFieldsValidator),
     publishing: publishingFieldsValidator,
+    // Same Admin-scoping as `projects.createdBy` above — see that comment.
+    createdBy: v.id("users"),
   })
     .index("by_agent", ["agentId"])
     .index("by_project", ["projectId"])
     .index("by_developer", ["developerId"])
     .index("by_community", ["communityId"])
     .index("by_publishing_slug", ["publishing.slug"])
-    .index("by_listing_status", ["listingStatus"]),
+    .index("by_listing_status", ["listingStatus"])
+    .index("by_created_by", ["createdBy"]),
 
   leads: defineTable({
     name: v.string(),
@@ -143,6 +164,9 @@ export default defineSchema({
   blogPosts: defineTable({
     title: localizedTextValidator,
     body: localizedTextValidator,
+    // Also doubles as the Admin-scoping field described on
+    // `projects.createdBy` above — an Admin (never Super Admin) may only
+    // update/delete/see posts where this matches their own `users._id`.
     authorUserId: v.id("users"),
     seo: v.optional(seoFieldsValidator),
     publishing: publishingFieldsValidator,

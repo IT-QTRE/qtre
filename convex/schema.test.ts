@@ -204,6 +204,13 @@ describe("projects table", () => {
       });
     });
     const projectId = await t.run(async (ctx) => {
+      const createdBy = await ctx.db.insert("users", {
+        tokenIdentifier: "clerk|admin-schema-test",
+        email: "admin-schema-test@example.com",
+        name: "Admin",
+        role: "admin",
+        createdAt: Date.now(),
+      });
       return await ctx.db.insert("projects", {
         title: { en: "Marina Heights" },
         description: { en: "A waterfront tower." },
@@ -212,6 +219,7 @@ describe("projects table", () => {
         countryCode: "AE",
         city: { en: "Dubai" },
         status: "under_construction",
+        createdBy,
         publishing: { slug: "marina-heights", status: "published", updatedAt: Date.now() },
       });
     });
@@ -233,6 +241,13 @@ describe("properties table", () => {
       });
     });
     const propertyId = await t.run(async (ctx) => {
+      const createdBy = await ctx.db.insert("users", {
+        tokenIdentifier: "clerk|admin-schema-test",
+        email: "admin-schema-test@example.com",
+        name: "Admin",
+        role: "admin",
+        createdAt: Date.now(),
+      });
       return await ctx.db.insert("properties", {
         price: 2_500_000,
         bedrooms: 3,
@@ -244,6 +259,7 @@ describe("properties table", () => {
         city: { en: "Dubai" },
         listingStatus: "for_sale",
         agentId,
+        createdBy,
         publishing: { slug: "marina-view-apartment", status: "published", updatedAt: Date.now() },
       });
     });
@@ -268,6 +284,13 @@ describe("leads table", () => {
       });
     });
     const propertyId = await t.run(async (ctx) => {
+      const createdBy = await ctx.db.insert("users", {
+        tokenIdentifier: "clerk|admin-schema-test-2",
+        email: "admin-schema-test-2@example.com",
+        name: "Admin",
+        role: "admin",
+        createdAt: Date.now(),
+      });
       return await ctx.db.insert("properties", {
         price: 2_500_000,
         bedrooms: 3,
@@ -279,6 +302,7 @@ describe("leads table", () => {
         city: { en: "Dubai" },
         listingStatus: "for_sale",
         agentId,
+        createdBy,
         publishing: { slug: "marina-view-apartment", status: "published", updatedAt: Date.now() },
       });
     });
@@ -394,6 +418,13 @@ describe("propertySubmissions table", () => {
     });
 
     const propertyId = await t.run(async (ctx) => {
+      const createdBy = await ctx.db.insert("users", {
+        tokenIdentifier: "clerk|admin-schema-test-3",
+        email: "admin-schema-test-3@example.com",
+        name: "Admin",
+        role: "admin",
+        createdAt: Date.now(),
+      });
       return await ctx.db.insert("properties", {
         price: 1_800_000,
         bedrooms: 2,
@@ -405,6 +436,7 @@ describe("propertySubmissions table", () => {
         city: { en: "Dubai" },
         listingStatus: "for_sale",
         sourceSubmissionId: submissionId,
+        createdBy,
         publishing: { slug: "apartment-in-jbr", status: "published", updatedAt: Date.now() },
       });
     });

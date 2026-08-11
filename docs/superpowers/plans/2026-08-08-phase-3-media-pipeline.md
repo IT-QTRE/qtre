@@ -66,23 +66,27 @@
 - Consumes: nothing.
 - Produces: `PRIVATE_BLOB_READ_WRITE_TOKEN`, read by Tasks 8–10. This task has manual, human-only steps — no CLI/API path exists for creating a store from inside this repo.
 
-- [ ] **Step 1: Manual — create a second, private Blob store (user-performed)**
+- [x] **Step 1: Manual — create a second, private Blob store (user-performed)**
 
-In the Vercel dashboard: project's **Storage** tab → **Create Database** → **Blob** → set access to **Private** → name it something like "qtre-private-documents" → in **Advanced Options**, set the environment variable prefix to `PRIVATE_` (so it lands as `PRIVATE_BLOB_READ_WRITE_TOKEN`, not colliding with the existing public store's `BLOB_READ_WRITE_TOKEN`) → connect it to this project, including the **Development** environment.
+Done. Vercel project `quicktalk-it-proj/qtre` linked via `vercel link` (Option B — CLI link, no GitHub connection). Public store created (default prefix → `BLOB_READ_WRITE_TOKEN`) and private store created (prefix `PRIVATE_BLOB` → `PRIVATE_BLOB_READ_WRITE_TOKEN`), both with Access correctly set (Public/Private) and both connected to Development, Preview, and Production environments, with the read-write token env var included.
 
-- [ ] **Step 2: Add the env var placeholder to `.env.example`**
+- [x] **Step 2: Add the env var placeholder to `.env.example`**
+
+Done — `.env.example` now has:
 
 ```bash
-# Vercel Blob
+# Vercel Blob — public store (marketing entities: properties, projects, developers, agents, communities, blogPosts)
 BLOB_READ_WRITE_TOKEN=
+
+# Vercel Blob — private store (propertySubmissions documents only)
 PRIVATE_BLOB_READ_WRITE_TOKEN=
 ```
 
-- [ ] **Step 3: Manual — pull/add the real value (user-performed)**
+- [x] **Step 3: Manual — pull/add the real value (user-performed)**
 
-`vercel env pull` (if the project is linked) or copy the value from the dashboard into `.env.local`.
+Done via `npx vercel env pull .env.local` — confirmed present: `BLOB_READ_WRITE_TOKEN`, `BLOB_STORE_ID`, `BLOB_WEBHOOK_PUBLIC_KEY`, `PRIVATE_BLOB_READ_WRITE_TOKEN`, `PRIVATE_BLOB_STORE_ID`, `PRIVATE_BLOB_WEBHOOK_PUBLIC_KEY` (variable names verified, values not inspected by the agent).
 
-- [ ] **Step 4: Do not commit**
+- [x] **Step 4: Do not commit**
 
 `.env.example` only — no `git add`/`git commit`.
 
@@ -1133,6 +1137,58 @@ Run: `npx tsc --noEmit`
 Expected: no errors.
 
 - [ ] **Step 3: Do not commit**
+
+---
+
+### Security review of Tasks 6–10 (background subagent) — findings and fixes
+
+A dedicated security-review subagent (per this plan's "reserve the full
+implementer+reviewer subagent pattern for the security-critical tasks"
+decision) audited Tasks 6–10 after they landed. It found one **Critical**
+issue and several **Important** ones, all fixed below with regression
+tests added to `convex/mediaItems.test.ts` and `convex/lib/mediaAccessConfig.test.ts`:
+
+- **Critical — cross-entity pathname substitution in `mediaItems.create`.**
+  `create`'s authorization only checked that the caller owned the
+  `entityId` argument — it never checked that the `pathname` argument had
+  anything to do with that entity. A caller authorized for their own
+  `propertySubmission` could pass a different (leaked/guessed) submission's
+  real pathname as `pathname`, and the row would be created, letting them
+  read/delete that other submission's private document through this app's
+  own "authorized" routes. **Fix:** every blob pathname must now live under
+  `{entityType}/{entityId}/` (`convex/lib/mediaAccessConfig.ts`'s new
+  `requiredPathnamePrefix`), enforced independently in three places: the
+  client's `upload()` call (`media-uploader.tsx`), the Route Handler's
+  `onBeforeGenerateToken` (`app/api/blob/upload/route.ts`), and
+  `mediaItems.create` itself. Binding `entityId` into the path makes the
+  substitution structurally impossible, not just discouraged.
+- **Important — silent fallback to the public store's token when an env
+  var is missing.** `app/api/blob/upload/route.ts`, `app/api/blob/private/route.ts`,
+  and `lib/actions/media.ts` all now throw/500 instead of leaving `token`
+  `undefined` (which would make the Blob SDK silently default to
+  `BLOB_READ_WRITE_TOKEN`, the *public* store, for what should be a private
+  upload/read/delete).
+- **Important — `getForPrivateDelivery` didn't check the entity was
+  actually private.** Added a check that rejects (throws `ForbiddenError`)
+  if `MEDIA_ACCESS_CONFIG[entityType].access !== "private"` — this route
+  exists solely to proxy private blobs; a public entity has no business
+  going through it.
+- **Important — delete ordering.** `lib/actions/media.ts`'s
+  `deleteMediaItem` now calls `deleteRecord` (Convex row) **before**
+  `del()` (Blob object), reversed from the original order. If the item
+  becomes ineligible between `getForDelete` and `deleteRecord` (e.g. a
+  concurrent status change), `deleteRecord` throws and `del()` never runs —
+  the blob stays untouched. The old order risked the opposite: an
+  authorization race destroying the blob while the Convex row (and its
+  authorization state) still existed.
+- **Important — `onUploadCompleted` signature verification for private
+  uploads.** The upload-completed webhook event carries the same
+  `entityType`/`entityId` JSON as `body.payload.tokenPayload` (not
+  `clientPayload`, which is only present on the initial
+  `blob.generate-client-token` event). `app/api/blob/upload/route.ts` now
+  checks both fields when selecting which store's token to hand to
+  `handleUpload()`, so signature verification uses the right store for
+  both event types.
 
 ---
 

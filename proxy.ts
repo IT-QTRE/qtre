@@ -15,6 +15,15 @@ const isPortalRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
 ]);
+// Next.js Route Handlers (Phase 3's app/api/blob/**) — these must still go
+// through clerkMiddleware (Route Handlers that call auth() depend on
+// Clerk's middleware having run on the request), but must never be handed
+// to intlMiddleware: a locale-prefix redirect would turn
+// `/api/blob/upload` into `/en/api/blob/upload`, breaking the endpoint.
+// Flagged as a follow-up in NOTES.md after Phase 2 dropped the old
+// Phase-0-era `api` exclusion when auth was introduced; this is the fix,
+// now that Phase 3 adds the first real app/api/** route.
+const isApiRoute = createRouteMatcher(["/api(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedPortalRoute(req)) {
@@ -23,9 +32,11 @@ export default clerkMiddleware(async (auth, req) => {
     // spec) — never hand these off to the next-intl middleware.
     return;
   }
-  if (isPortalRoute(req)) {
-    // Sign-in/sign-up: no auth required, but still must not be
-    // locale-prefixed — same reasoning as the protected portal routes above.
+  if (isPortalRoute(req) || isApiRoute(req)) {
+    // Sign-in/sign-up and API routes: no auth.protect() at the middleware
+    // layer (each API route handler does its own auth() check), but still
+    // must not be locale-prefixed — same reasoning as the protected portal
+    // routes above.
     return;
   }
   return intlMiddleware(req);

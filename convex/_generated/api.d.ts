@@ -9,16 +9,28 @@
  */
 
 import type * as agentInvitations from "../agentInvitations.js";
+import type * as agents from "../agents.js";
+import type * as auditLogs from "../auditLogs.js";
+import type * as blogPosts from "../blogPosts.js";
+import type * as communities from "../communities.js";
+import type * as developers from "../developers.js";
+import type * as leads from "../leads.js";
 import type * as lib_agentInvitation from "../lib/agentInvitation.js";
 import type * as lib_auditLog from "../lib/auditLog.js";
 import type * as lib_clerkMetadata from "../lib/clerkMetadata.js";
 import type * as lib_localizedText from "../lib/localizedText.js";
+import type * as lib_mediaAccessConfig from "../lib/mediaAccessConfig.js";
+import type * as lib_mediaAuthorization from "../lib/mediaAuthorization.js";
 import type * as lib_mediaEntityType from "../lib/mediaEntityType.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as lib_propertyFacts from "../lib/propertyFacts.js";
 import type * as lib_roles from "../lib/roles.js";
 import type * as lib_seoFields from "../lib/seoFields.js";
+import type * as mediaItems from "../mediaItems.js";
+import type * as projects from "../projects.js";
+import type * as properties from "../properties.js";
 import type * as users from "../users.js";
+import type * as websiteSettings from "../websiteSettings.js";
 
 import type {
   ApiFromModules,
@@ -28,16 +40,28 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agentInvitations: typeof agentInvitations;
+  agents: typeof agents;
+  auditLogs: typeof auditLogs;
+  blogPosts: typeof blogPosts;
+  communities: typeof communities;
+  developers: typeof developers;
+  leads: typeof leads;
   "lib/agentInvitation": typeof lib_agentInvitation;
   "lib/auditLog": typeof lib_auditLog;
   "lib/clerkMetadata": typeof lib_clerkMetadata;
   "lib/localizedText": typeof lib_localizedText;
+  "lib/mediaAccessConfig": typeof lib_mediaAccessConfig;
+  "lib/mediaAuthorization": typeof lib_mediaAuthorization;
   "lib/mediaEntityType": typeof lib_mediaEntityType;
   "lib/permissions": typeof lib_permissions;
   "lib/propertyFacts": typeof lib_propertyFacts;
   "lib/roles": typeof lib_roles;
   "lib/seoFields": typeof lib_seoFields;
+  mediaItems: typeof mediaItems;
+  projects: typeof projects;
+  properties: typeof properties;
   users: typeof users;
+  websiteSettings: typeof websiteSettings;
 }>;
 
 /**

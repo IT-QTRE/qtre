@@ -21,7 +21,7 @@ PR/session.
 These are gaps in `TECH_STACK.md` that weren't specified. Flagging them here so
 they get a decision at the right time instead of blocking now.
 
-- [ ] **Blog content editor** — Markdown/MDX field vs. WYSIWYG rich text (e.g. Tiptap)? *(needed by Phase 4)*
+- [x] ~~**Blog content editor**~~ — resolved at the Phase 4c review: Tiptap WYSIWYG, stored as an HTML string per locale (fits the existing `localizedTextValidator`/`LocalizedText` shape unchanged — no schema migration). See `docs/superpowers/plans/2026-08-11-phase-4c-leads-blog-media-users-settings-audit.md`.
 - [ ] **Map provider** for property/project location — Google Maps vs Mapbox vs none for v1? *(needed by Phase 5)*
 - [x] ~~**Lead-form spam protection**~~ — resolved for the general Contact page: it embeds GoHighLevel's own hosted form (script/iframe), so that spam protection is GHL's responsibility, not ours. Still needed for the property/project inquiry form (which *is* a Convex mutation, unlike Contact) — honeypot and/or rate limiting is the minimum bar; decide at Phase 5.
 - [x] ~~**Public visitor accounts**~~ — resolved via `docs/superpowers/specs/2026-08-07-roles-and-portals-design.md`: Clerk extends beyond admin-only to Agent and Client portal accounts. No generic buyer favorites/saved-search accounts.
@@ -90,33 +90,36 @@ Implemented per `docs/superpowers/plans/2026-08-08-phase-2-auth-authorization.md
 
 Built before the admin CRUD forms that depend on it — Developer/Agent/Project/
 Property forms all carry image fields, so the upload widget needs to exist
-before those forms are built, not retrofitted in afterward.
+before those forms are built, not retrofitted in afterward. Full design
+record, including a post-implementation security review that hardened this
+pipeline, in `docs/superpowers/plans/2026-08-08-phase-3-media-pipeline.md`.
 
-- [ ] Vercel Blob upload flow (client upload via signed token from an authenticated server action — no public upload endpoint)
-- [ ] Store metadata as rows in the `mediaItems` table (Phase 1); file lives in Blob
-- [ ] Upload UI: drag-drop, reordering (writes `order` on `mediaItems`), alt-text entry, delete
-- [ ] `PropertyImage`-style reusable `next/image` wrapper components for admin previews and public pages
-- [ ] Basic upload validation (file type, size limits)
-- [ ] Confirm Client Portal submission documents (title deed, floor plans, etc.) reuse this same upload pipeline via `mediaItems` (`entityType: "propertySubmission"`) — no separate document system
+- [x] Vercel Blob upload flow — client-direct upload (`upload()` from `@vercel/blob/client`) via a Route Handler (`app/api/blob/upload/route.ts` using `handleUpload()`), not a Server Action as originally phrased (Server Actions are capped at 4.5MB; a Route Handler is still the required auth-gated exchange point, never a public/unauthenticated endpoint)
+- [x] **Two Blob stores, not one** — public (marketing entities) and private (`propertySubmission` documents, served only through an authenticated delivery route, `app/api/blob/private/route.ts`) — a correction to this plan's original single-store phrasing, driven by `propertySubmission` documents being real client-submitted personal documents, not public marketing content
+- [x] Store metadata as rows in the `mediaItems` table (Phase 1); file lives in Blob — every pathname namespaced `{entityType}/{entityId}/...` and that binding independently enforced at upload-token time and at `mediaItems.create` (a Critical finding from the post-implementation security review: without this, a caller authorized for their own entity could otherwise substitute another entity's real pathname)
+- [x] Upload UI: drag-drop, reordering (writes `order` on `mediaItems`, `@dnd-kit/core`+`@dnd-kit/sortable`), alt-text entry (schema field; not yet exposed as a form input — no admin form exists to host it until Phase 4), delete
+- [x] `MediaImage` reusable wrapper (`components/media/media-image.tsx`) — `next/image` for public entities, an authenticated `<img>`/document-link for private entities — for admin previews and public pages
+- [x] Basic upload validation (file type, size limits) — per-entity-type via `convex/lib/mediaAccessConfig.ts`'s `MEDIA_ACCESS_CONFIG` (images-only for marketing entities; images+PDF for `propertySubmission`), enforced both client-side (file picker `accept`) and server-side (Route Handler + `create` mutation)
+- [x] Confirm Client Portal submission documents (title deed, floor plans, etc.) reuse this same upload pipeline via `mediaItems` (`entityType: "propertySubmission"`) — no separate document system; Client role also granted `mediaItems: delete`, scoped to their own still-`pending` submission (Phase 1's matrix only had `read`+`create`)
 
 ## Phase 4 — Admin Dashboard Core
 
 Build CRUD in dependency order — entities other tables reference should exist first.
 
-- [ ] Admin shell: sidebar nav, dashboard overview page, layout separate from public site
-- [ ] Reusable `DataTable` component (TanStack Table + shadcn/ui): sorting, filtering, pagination, column visibility, row selection, bulk actions
-- [ ] Developers CRUD (RHF + Zod forms)
-- [ ] Agents CRUD
-- [ ] Communities CRUD (country-aware: `countryCode`, translated `name`/`city`/`description`)
-- [ ] Projects CRUD (references Developers/Communities)
-- [ ] Properties CRUD (references Projects/Developers/Agents/Communities)
-- [ ] Leads management (list, status, assignment) — property/project inquiries only; the general Contact page's GoHighLevel submissions are not shown here
-- [ ] Blog CRUD (resolve editor choice from Open Decisions)
-- [ ] Media library screen (query `mediaItems` without an `entityType`/`entityId` filter — the unified table backs this directly, no separate concept needed)
-- [ ] Users & Roles management screen
-- [ ] Website Settings screen
-- [ ] Audit Logs viewer (read-only, filterable)
-- [ ] SEO override fields (`SeoFields`) exposed in Property/Project/Blog forms with sensible auto-generated defaults
+- [x] Admin shell: sidebar nav, dashboard overview page, layout separate from public site
+- [x] Reusable `DataTable` component (TanStack Table + shadcn/ui): sorting, filtering, pagination, column visibility, row selection, bulk actions
+- [x] Developers CRUD (RHF + Zod forms)
+- [x] Agents CRUD
+- [x] Communities CRUD (country-aware: `countryCode`, translated `name`/`city`/`description`)
+- [x] Projects CRUD (references Developers/Communities)
+- [x] Properties CRUD (references Projects/Developers/Agents/Communities)
+- [x] Leads management (list, status, assignment) — property/project inquiries only; the general Contact page's GoHighLevel submissions are not shown here
+- [x] Blog CRUD (resolve editor choice from Open Decisions)
+- [x] Media library screen (query `mediaItems` without an `entityType`/`entityId` filter — the unified table backs this directly, no separate concept needed)
+- [x] Users & Roles management screen
+- [x] Website Settings screen
+- [x] Audit Logs viewer (read-only, filterable)
+- [x] SEO override fields (`SeoFields`) exposed in Property/Project/Blog forms with sensible auto-generated defaults — via the shared `SeoFieldsSection` (`components/forms/seo-fields-section.tsx`), extracted during Phase 4c and used by all publishable-entity forms (Developers/Agents/Communities/Projects/Properties/Blog)
 - [ ] Agent Portal: scoped view of assigned Properties/Projects, Leads, and submissions (reuses admin shell/`DataTable`, permission-scoped by `agentId`/`assignedReviewerId`)
 - [ ] Client Portal: submission form (property details + document upload) and status view (pending/under review/approved/rejected)
 - [ ] Property submission review queue (Admin/Agent): approve (creates `properties` record with `sourceSubmissionId` back-reference) or reject (records `rejectionReason`)

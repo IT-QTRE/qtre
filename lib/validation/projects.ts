@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { localizedTextSchema, publishingFieldsSchema, seoFieldsSchema } from "./shared";
+import { localizedTextSchema, paymentPlanSchema, publishingFieldsSchema, seoFieldsSchema } from "./shared";
 
 export const projectSchema = z.object({
   title: localizedTextSchema,
@@ -12,6 +12,7 @@ export const projectSchema = z.object({
   startingPrice: z.number().positive().optional(),
   coordinates: z.object({ lat: z.number(), lng: z.number() }).optional(),
   amenities: z.array(z.string()).optional(),
+  paymentPlan: paymentPlanSchema,
   seo: seoFieldsSchema.optional(),
   publishing: publishingFieldsSchema,
 });

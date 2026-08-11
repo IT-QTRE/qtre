@@ -96,7 +96,7 @@ export const PERMISSION_MATRIX: Record<Role, Record<Resource, Action[]>> = {
     leads: [],
     propertySubmissions: ["read", "create", "update"],
     blogPosts: [],
-    mediaItems: ["read", "create"],
+    mediaItems: ["read", "create", "delete"],
     users: [],
     websiteSettings: [],
     auditLogs: [],
@@ -106,3 +106,55 @@ export const PERMISSION_MATRIX: Record<Role, Record<Resource, Action[]>> = {
 export function can(role: Role, resource: Resource, action: Action): boolean {
   return PERMISSION_MATRIX[role][resource].includes(action);
 }
+
+// Every resource, as a validator — used for the general-purpose
+// `Resource` shape wherever a Convex arg/schema field needs to hold one.
+export const resourceValidator = v.union(
+  v.literal("properties"),
+  v.literal("projects"),
+  v.literal("developers"),
+  v.literal("agents"),
+  v.literal("communities"),
+  v.literal("leads"),
+  v.literal("propertySubmissions"),
+  v.literal("blogPosts"),
+  v.literal("mediaItems"),
+  v.literal("users"),
+  v.literal("websiteSettings"),
+  v.literal("auditLogs"),
+);
+
+// Resources that have their own top-level admin nav tab. A Super Admin can
+// runtime-toggle Admin-role access to any of these (see
+// convex/websiteSettings.ts `updateAdminAccess`); Super Admin itself is
+// never affected. `propertySubmissions` is deliberately excluded — it has
+// no dedicated nav tab, so there is nothing to toggle.
+export const toggleableResourceValidator = v.union(
+  v.literal("properties"),
+  v.literal("projects"),
+  v.literal("developers"),
+  v.literal("agents"),
+  v.literal("communities"),
+  v.literal("leads"),
+  v.literal("blogPosts"),
+  v.literal("mediaItems"),
+  v.literal("users"),
+  v.literal("websiteSettings"),
+  v.literal("auditLogs"),
+);
+
+export type ToggleableResource = Infer<typeof toggleableResourceValidator>;
+
+export const ADMIN_TOGGLEABLE_RESOURCES: ToggleableResource[] = [
+  "properties",
+  "projects",
+  "developers",
+  "agents",
+  "communities",
+  "leads",
+  "blogPosts",
+  "mediaItems",
+  "users",
+  "websiteSettings",
+  "auditLogs",
+];

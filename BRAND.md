@@ -44,7 +44,7 @@ The palette above maps directly onto the shadcn/ui semantic tokens already consu
 | `--ring` | `#6A1017` | `#C8A15B` | Focus ring tied to brand instead of generic gray |
 | `--destructive` | `#B3261E` | `#E5534B` | Kept semantically distinct from primary burgundy so errors are unambiguous |
 | `--chart-1..5` | burgundy, gold, bronze, sage, warm gray | (dark-adjusted) | For future admin dashboard analytics — not specified on the brand board, derived to harmonize |
-| `--sidebar-*` | mirrors card/accent/border | mirrors dark card/accent/border | Placeholder for the admin dashboard shell (Phase 3 in `PLAN.md`) — revisit once the admin UI is actually designed |
+| `--sidebar-*` | mirrors card/accent/border | mirrors dark card/accent/border | Confirmed (Phase 4a): `admin-sidebar.tsx`/`admin-mobile-header.tsx` consume the full set — `bg-sidebar` fill, `border-sidebar-border` dividers, `bg-sidebar-accent`/`text-sidebar-accent-foreground` for the active/hover nav row, and `text-sidebar-primary` (burgundy) tinting the active row's icon so the brand's primary color still reads as the "you are here" signal against an otherwise neutral warm-beige rail |
 
 Everything not explicitly given (dark mode, focus ring, destructive red, chart colors, sidebar) was derived to stay harmonious with the four core colors — treat these as a reasonable starting default, not a locked decision.
 
@@ -143,6 +143,7 @@ This is a reasonable extrapolation from one confirmed example + the tagline — 
 
 | Date | Change |
 |------|--------|
+| 2026-08-10 | Admin dashboard shell (Phase 4a) wired to the `--sidebar-*` tokens — was a placeholder until the admin UI existed; sidebar row above updated to reflect actual usage |
 | 2026-08-07 | Core palette locked in and wired into `app/globals.css` |
 | 2026-08-07 | Typography set: Poppins (headings) + Inter (body), wired into `app/layout.tsx` |
 | 2026-08-07 | Primary logo lockup added at `public/brand/qtre-no-bg.png` |

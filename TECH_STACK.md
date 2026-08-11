@@ -291,75 +291,155 @@ Next.js already provides routing, layouts, rendering, navigation, loading bounda
 
 ## Media Storage and Image Optimization
 
-### Vercel Blob
+*(Implemented in Phase 3 — see `docs/superpowers/plans/2026-08-08-phase-3-media-pipeline.md` for the full design record, including the security review that hardened this pipeline post-implementation.)*
 
-Vercel Blob will store:
+### Two Vercel Blob stores — public and private
 
-- Property images
-- Project images
-- Agent profile photos
-- Developer logos
-- Blog images
-- Brochures
-- Floor plans
-- Property documents
-- Other uploaded media
+Access mode (public/private) is a property of the *store*, not a per-file flag. This app uses **two** stores, chosen per `mediaItems.entityType` via `convex/lib/mediaAccessConfig.ts`'s `MEDIA_ACCESS_CONFIG` (the single source of truth for access mode, allowed content types, and max size per entity type):
 
-Only the file URL and related metadata should be stored in Convex.
+- **Public store** (`BLOB_READ_WRITE_TOKEN`) — marketing content served directly via CDN URL, no auth needed to view: `property`, `project`, `developer`, `agent`, `community`, `blogPost`. Images only (jpeg/png/webp/avif).
+- **Private store** (`PRIVATE_BLOB_READ_WRITE_TOKEN`) — real client-submitted documents (title deeds, floor plans) on `propertySubmission`: every read goes through an authenticated Route Handler (`app/api/blob/private/route.ts`), so a leaked direct Blob URL alone is useless. Images + PDF.
 
-Suggested image metadata:
+Every blob's pathname is namespaced `{entityType}/{entityId}/{filename}` (`requiredPathnamePrefix` in `mediaAccessConfig.ts`) and that prefix is independently enforced in three places — the client's `upload()` call, the upload Route Handler's `onBeforeGenerateToken`, and `mediaItems.create` itself — so a caller authorized for their own entity can never smuggle in a pathname belonging to someone else's entity.
+
+Client-direct upload uses `upload()` from `@vercel/blob/client` against `app/api/blob/upload/route.ts` (a Route Handler using `handleUpload()`, not a Server Action — Server Actions are capped at 4.5MB). `onUploadCompleted` is intentionally a no-op (unreliable in local dev without a tunnel); the `mediaItems` row is instead created by the client calling `convex/mediaItems.ts`'s `create` mutation directly right after `upload()` resolves.
+
+`convex/schema.ts`'s actual `mediaItems` table:
 
 ```ts
-type MediaItem = {
-  url: string;
-  pathname: string;
-  alt: string;
-  order: number;
-  width?: number;
-  height?: number;
-  mimeType?: string;
-};
+mediaItems: defineTable({
+  entityType: mediaEntityTypeValidator, // "property" | "project" | ... | "propertySubmission"
+  entityId: v.string(),                 // polymorphic — no single foreign table
+  url: v.string(),
+  pathname: v.string(),
+  alt: v.optional(localizedTextValidator),
+  order: v.number(),
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
+  mimeType: v.string(),
+}).index("by_entity", ["entityType", "entityId", "order"]),
 ```
+
+### Client-side WebP compression before upload
+
+Real-estate photos from phones/DSLRs are often 5–15MB. `lib/media/compressImage.ts` resizes (longest edge capped, see `lib/media/imageDimensions.ts`) and re-encodes to WebP client-side using the native Canvas API (`createImageBitmap` + `canvas.toBlob('image/webp', quality)`) — no new dependency. This cuts upload time and Blob storage cost before the bytes ever leave the browser; falls back to the original file untouched if the browser can't encode WebP or the input isn't an image (PDFs pass through as-is).
+
+### `MediaUploader` — the reusable upload component
+
+`components/media/media-uploader.tsx` is the one component every future admin/portal form mounts for image/document fields (`<MediaUploader entityType entityId />`): drag-and-drop or click-to-upload, drag-to-reorder (`@dnd-kit/core` + `@dnd-kit/sortable`, ~15KB gzip — the standard accessible mouse/touch/keyboard DnD library), and delete. `@dnd-kit`'s `PointerSensor` is configured with an 8px `activationConstraint` distance so ordinary clicks on interactive children (the Remove button, the private-document "View document" link) aren't misread as drag gestures.
+
+`components/media/media-image.tsx` renders public entities via `next/image` against the direct Blob CDN URL (gets Vercel's image optimization) and private entities via a plain `<img>` (or, for non-image mime types like PDF, a document link) against `/api/blob/private?mediaItemId=...` — `next/image`'s own fetcher can't carry the auth needed for the private route.
+
+### Deletion
+
+`lib/actions/media.ts`'s `deleteMediaItem` Server Action: authorization check (`getForDelete`) → delete the Convex row (`deleteRecord`) → delete the Blob object (`del()`). The Convex row is deleted *before* the Blob object (not after) — if the row becomes ineligible for deletion between the two checks, `deleteRecord` throws and the Blob object is never touched; the reverse order risks destroying the Blob object out from under a live, still-referencing Convex row.
 
 ### Next.js Image
 
-The Next.js `<Image>` component will be used to provide:
+The Next.js `<Image>` component provides responsive sizes, lazy loading, modern formats, and layout-shift prevention for every public entity's media. `next.config.ts`'s `images.remotePatterns` allows `*.public.blob.vercel-storage.com`.
 
-- Responsive image sizes
-- Lazy loading
-- Image resizing
-- Modern image formats
-- Layout-shift prevention
-- Vercel image caching and optimization
+Cloudinary is not required. It may be considered later if advanced transformations, automated watermarks, smart cropping, or digital asset management become necessary.
 
-Example:
+---
 
-```tsx
-import Image from "next/image";
+## Admin Dashboard Shell and CRUD Patterns
 
-type PropertyImageProps = {
-  src: string;
-  alt: string;
-};
+*(Implemented in Phase 4a — see `docs/superpowers/plans/2026-08-10-phase-4a-admin-shell-and-first-crud.md` for the full design record. This sub-phase built the shell plus the first three CRUD entities — Developers, Agents, Communities — and every pattern below is reused unchanged by later Phase 4 sub-phases.)*
 
-export function PropertyImage({ src, alt }: PropertyImageProps) {
-  return (
-    <div className="relative aspect-[4/3] overflow-hidden rounded-xl">
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-        className="object-cover"
-      />
-    </div>
-  );
+### Admin shell
+
+`app/(portal)/admin/layout.tsx` renders a fixed desktop sidebar (`components/admin/admin-sidebar.tsx`, `hidden md:flex`) and a mobile header with a `Sheet` drawer (`components/admin/admin-mobile-header.tsx`), both driven by one shared nav list (`components/admin/admin-nav-items.ts`) so the two surfaces can never drift out of sync. Nav only lists screens that actually exist — each later sub-phase appends its own items when it lands, rather than pre-listing "coming soon" dead links. The dashboard overview (`app/(portal)/admin/page.tsx`) shows a welcome header, role badge, and one live count card per top-level entity (`fetchQuery`'d server-side, in parallel via `Promise.all`), each linking to its list screen.
+
+### Reusable `DataTable`
+
+`components/admin/data-table.tsx` wraps TanStack Table for every admin list screen: client-side sorting, a single global-text filter (`filterColumnId` picks which flattened column the filter matches against), pagination, row selection, and an optional `bulkActions` slot rendered only when rows are selected. Client-side only (`.collect()`s the full table) — correct for low-cardinality tables (tens of rows); revisit for Properties if it grows past that. `components/admin/data-table-column-header.tsx` provides the shared sortable-column-header button.
+
+The project is on `@tanstack/react-table` v9 but consumes it through its `/legacy` compatibility import (`useLegacyTable`, `getCoreRowModel`, etc.) to keep the familiar v8-shaped API; `ColumnDef` still requires v9's `TFeatures` generic (satisfied with `StockFeatures`) and the table's `TData` is constrained to `Record<string, unknown>` per `@tanstack/table-core`'s `RowData` requirement.
+
+### Reusable `LocalizedTextField`
+
+`components/forms/localized-text-field.tsx` renders one `Tabs`-based en/ar/tr input (or `Textarea` when `multiline`) per `LocalizedText` field, RTL-aware (`dir="rtl"` on the Arabic tab), wired to React Hook Form via `Controller` and a `name` prefix (`${name}.en` etc.). Every entity form's translated fields (`name`, `description`, `bio`, `city`, `seo.seoTitle`, `seo.seoDescription`, ...) use this one component.
+
+### One full-page form for both Create and Edit
+
+Each entity has a single form component (`developer-form.tsx`, `agent-form.tsx`, `community-form.tsx`, `project-form.tsx`, `property-form.tsx`) that renders every field — including relations and SEO overrides — and takes a `{ mode: "create" } | { mode: "edit"; <entity>: Doc<"...">  }` prop to pick the mutation (`create` vs `update`), the RHF init strategy (`defaultValues` vs the reactive `values`), and the button/toast copy. `create`/`update` mutations always accept the identical argument shape (`update` is just `create`'s args plus `id`; see `convex/*.ts`), so there's no separate "create schema" to keep in sync — the form's Zod schema and default values are shared as-is.
+
+Create was originally a shadcn `Dialog` (fields-only, deferring relations/SEO to Edit) to keep it short, but a modal's fixed max-height doesn't scale: the 2-column "landscape" layout used to shorten it only applies at `md:` and up, so phones saw the tall single-column form anyway, scrolling inside a small nested box — a worse mobile experience than a normal page scroll, and one accidental backdrop tap away from losing typed input. Create is now a full page at `/admin/<entity>/new` (`app/(portal)/admin/<entity>/new/page.tsx`), which removes the height constraint entirely, gets its own URL (so the browser back button and the shared `BackLink` component both just work), and has room to show the same fields Edit does.
+
+`MediaUploader` still only appears in `mode === "edit"` — it needs a real `entityId` that doesn't exist until the record is first saved. `mode === "create"` renders `MediaPicker` instead (`components/media/media-picker.tsx`): files are staged locally as object URLs (no upload yet, no `entityId` needed), and once the `create` mutation returns the new record's real id, the page uploads every staged file in parallel (`Promise.allSettled`) via the shared `uploadMediaFile` helper before redirecting into `/admin/<entity>/[id]`, the same component now rendering in edit mode with the (now-populated) media section visible.
+
+### Server-side publishing timestamps
+
+`create`/`update` mutations (`convex/developers.ts`, `agents.ts`, `communities.ts`) accept only `slug`/`status` for the `publishing` sub-object — never a client-supplied `updatedAt`/`publishedAt`. The handler sets `updatedAt: Date.now()` itself on every write, and sets `publishedAt` exactly once, the first time `status` transitions to `"published"`, preserving the original value on every subsequent update.
+
+### Slug uniqueness, enforced per-mutation
+
+Convex has no unique-index constraint, so `create`/`update` check for a same-slug collision themselves before writing:
+
+- **Developers, Agents** — globally unique, via each table's own `by_publishing_slug` index (excluding `args.id` on update).
+- **Communities** — unique **per country**, via the `by_country_and_slug` compound index (`countryCode` + `publishing.slug`), since two communities in different countries may legitimately share a slug.
+
+Each entity file writes its own ~3-line `assertSlugAvailable` helper rather than a shared cross-table utility — Convex's typed index builders don't generalize cleanly across tables with different index shapes.
+
+### Phase 4b additions (Projects, Properties)
+
+*(See `docs/superpowers/plans/2026-08-10-phase-4b-projects-properties-crud.md` for the full design record.)*
+
+**FK pickers use plain shadcn `Select`s.** Developer/Community/Project/Agent relations are populated straight from each entity's own `list` query (e.g. `useQuery(api.developers.list)`) into a `Select` — the same widget already used for `status`. No combobox/search component; revisit only if a list grows long enough to need one. Optional relations render an empty-string `value` when unset and translate `""` back to `undefined` at the submit boundary (see `OptionalRelationSelect` in `property-form.tsx`).
+
+**Referential-integrity delete guards.** `remove` mutations that could orphan a foreign key now check for referencing rows first and throw if any exist, surfaced to the admin via `toast.error`:
+
+- `developers.remove` / `communities.remove` — block if any `projects`/`properties` row references them (`by_developer`/`by_community` indexes).
+- `projects.remove` — blocks if any `properties` row references it (`by_project` index).
+- `properties.remove` — no guard; nothing in the schema references a `properties` row by id.
+
+**Agent row-level ownership scoping on `properties.update`.** The permission matrix (`convex/lib/roles.ts`) grants the `agent` role `update` on `properties`, but scoping to *their own* assigned property is enforced in the mutation, not the matrix (per that file's own comment). Since `properties.agentId` points at an `agents` row (not a `users` row), the check resolves the caller's own `agents` row via the `by_user` index before comparing:
+
+```ts
+if (actor.role === "agent") {
+  const agentProfile = await ctx.db
+    .query("agents")
+    .withIndex("by_user", (q) => q.eq("userId", actor._id))
+    .unique();
+  if (!agentProfile || existing.agentId !== agentProfile._id) {
+    throw new ForbiddenError("Agents can only update their own assigned properties");
+  }
 }
 ```
 
-Vercel Blob stores the original file. Next.js Image and Vercel handle optimized delivery.
+`projects.update` has no equivalent check — `projects` has no `agentId` field to scope by — so it stays role-gated only; a deliberate asymmetry, not an oversight.
 
-Cloudinary is not required initially. It may be considered later if advanced transformations, automated watermarks, smart cropping, or digital asset management become necessary.
+**Numeric and nested-optional form fields stay as plain strings.** `z.preprocess()`/`.transform()` on a field inside a `zodResolver`-validated schema broke React Hook Form's `Resolver` generic (`TS2719: Two different types with this name exist, but they are unrelated` — hit while building `project-edit-form.tsx`). The fix used everywhere numeric or nested-object values need a text input (price, bedrooms, coordinates lat/lng, starting price) is to type the field as a plain `z.string().optional()`, bind it with a normal `<Input type="number">` + `form.register(...)` (no `valueAsNumber`), and convert to the real `number`/`{ lat, lng }` shape by hand in `onSubmit` before calling the mutation. Comma-separated lists (`amenities`) follow the same pattern: a `z.string().optional()` "amenitiesText" field, split into `string[]` on submit and `.join(", ")`'d back in `toFormValues`.
+
+**`FieldHint` for form UX.** `components/forms/field-hint.tsx` is a one-line styled `<p>` dropped in under any `Input`/`Select`/`Controller`, in the same slot the destructive-red error message uses (hint renders above the error when both are present, so an error is never visually buried under static help text). `LocalizedTextField` takes an optional `hint` prop for the same purpose on translated fields, rendered once under the tab group (not per-locale). Applied to every field across Developers/Agents/Communities/Projects/Properties whose format, constraints, or blank-value behavior isn't self-evident (slug, country code, coordinates, amenities, SEO fallback behavior, optional contact fields, publishing status).
+
+**Properties' and Projects' forms are tabbed** (`components/ui/tabs.tsx`: Details / Relations / SEO) — both have meaningfully more fields than Developers/Agents/Communities, in both Create and Edit now that each shares one component. Developers/Agents/Communities stay untabbed (few enough fields that tabs would just add clicks). `MediaUploader` stays outside/below the tabs, matching every other entity's "media always visible below the form" convention (and only rendered in edit mode, per above).
+
+**Amenities are clickable pills, not free text.** `components/forms/amenity-picker.tsx` renders a curated list (`lib/constants/amenities.ts`) as toggleable pills bound to a plain `string[]` form field (`z.array(z.string()).optional()`), used by both Projects and Properties. Any value already on the field that isn't in the curated list (typed before this picker existed) still renders as a selected pill via an "Other amenity…" input, so nothing already stored is silently dropped. This replaced an earlier free-text `"Pool, Gym, Parking"` comma-list field — inconsistent capitalization/wording in free text would have made a future public-site amenity filter unreliable.
+
+**Bedrooms/Bathrooms (Properties) are `Select`s over a small fixed range** (Studio–6+ / 1–5+), not free numeric entry — the real-world range is small enough that a dropdown beats typos, unlike Price/Area which stay numeric since they're genuinely continuous.
+
+**No Latitude/Longitude fields on Projects or Properties.** Both `coordinates` fields were removed from the form (though the field remains in the schema) — there's no map picker yet and a bare lat/lng text-pair wasn't pulling its weight. Saving a record without them leaves any existing `coordinates` value untouched (the field is omitted from the mutation payload entirely, never sent as an explicit `undefined`, which Convex's `patch()` would otherwise treat as clearing it).
+
+### Phase 4c additions (Leads, Blog, Media Library, Users & Roles, Website Settings, Audit Logs)
+
+*(See `docs/superpowers/plans/2026-08-11-phase-4c-leads-blog-media-users-settings-audit.md` for the full design record.)*
+
+**Shared `SeoFieldsSection`.** The identical SEO-tab markup (`seo.seoTitle`/`seo.seoDescription`/`seo.canonicalPath`, three `LocalizedTextField`/`Input` fields) duplicated across all five Phase 4a/4b forms is now `components/forms/seo-fields-section.tsx`, a single reusable component. Blog and Website Settings are its 6th/7th consumers; the five existing forms were refactored to use it too, so there is exactly one place this markup lives.
+
+**`LocalizedTextField` gets a `richText` variant.** Rather than a parallel component, `components/forms/localized-text-field.tsx` grew a `richText?: boolean` prop that swaps the per-locale `Textarea` for `components/forms/rich-text-editor.tsx` (Tiptap `useEditor`/`EditorContent`, a small fixed toolbar — bold/italic/heading 2/heading 3/bullet list/ordered list/link) — still one `Tabs`-based en/ar/tr shell, still wired through the same `Controller` + `name` prefix convention every other translated field uses. Body content is stored as an HTML string per locale (`editor.getHTML()`), fitting the existing `localizedTextValidator`/`LocalizedText` shape unchanged — no schema migration. Sanitizing that HTML for public rendering is a Phase 5 concern; the write side is trusted-user-only (only `admin`/`super_admin` can author Blog posts).
+
+**Leads** (`convex/leads.ts`, `/admin/leads`): `list`/`get`/`update`/`remove`, no `create` (leads only ever originate from a future Phase 5 public inquiry mutation). `update` is the only mutable surface (`status`, `assignedAgentId`); an Agent may only update a lead currently assigned to them (`existing.assignedAgentId === agentProfile._id`, resolved via the `by_user` index, same pattern as `properties.update`'s Agent scoping from 4b). Deleting a referenced Property/Agent does not block — the Leads list/edit UI resolves `propertyId`/`projectId`/`assignedAgentId` into an id→name map client-side and falls back to `"Deleted property"`/`"Deleted agent"` instead of blocking, unlike the Developer/Community/Project referential-integrity guards from 4a/4b.
+
+**Blog** (`convex/blogPosts.ts`, `/admin/blog`): `authorUserId` is auto-assigned server-side from the authenticated actor at `create` time — never a client-supplied field, and `update` never touches it, so the original author is permanent. Body uses the `richText` `LocalizedTextField` variant above. Cover image reuses the existing generic media pipeline as-is (`blogPost` was already a registered public `MediaEntityType` from Phase 3) — no dedicated `coverImageUrl` field; the lowest-`order` media item is the thumbnail everywhere, same as Properties/Projects.
+
+**Website Settings** (`convex/websiteSettings.ts`, `/admin/settings`): a true singleton — `get` returns the one row or `null`, `upsert` inserts on first save and patches on every save after, setting `updatedAt` itself. No list, no `[id]` route, no delete — the only admin screen with a fixed URL and no id anywhere in it.
+
+**Audit Logs** (`convex/auditLogs.ts`, `/admin/audit-logs`): the first genuinely unbounded table in this project (every sensitive mutation across every resource writes a row here, forever), so it's the first list screen to use real server-side pagination (`paginationOptsValidator` + `.paginate()` + `usePaginatedQuery`) instead of the shared `DataTable`. A new `by_resource` index (`["resource", "createdAt"]`) sits alongside the existing `by_actor`/`by_created_at` so a resource-filtered page is still an index scan. `listPaginated`'s index selection is strict: an explicit `resource` filter wins over `actorUserId` if both are somehow passed — v1 only supports filtering by one dimension at a time, and the admin UI mirrors that by clearing whichever filter isn't active whenever the other one is set.
+
+**Users & Roles** (`convex/users.ts`, `/admin/users`): role change is an inline per-row `Select` bound to `updateRole`, not an edit page. `updateRole` blocks changing your own role unconditionally (any role, including Super Admin), and additionally blocks an `admin` actor from touching any row whose current OR requested role is `admin`/`super_admin` (the existing "Admin cannot manage other Admin accounts" rule from `convex/lib/roles.ts`, now enforced in code). The UI mirrors this rule client-side (disabling the `Select` entirely on unreachable rows, narrowing an Admin's own selectable options to just Agent/Client) purely for UX — `updateRole` itself is the real enforcement point regardless of what the client renders. "Invite Agent" is the one remaining shadcn `Dialog` in the whole admin dashboard — a single email input triggering the already-built `agentInvitations.inviteAgent` action; every other 4a/4b/4c screen uses a full page instead.
+
+**Media Library** (`convex/mediaItems.ts`'s `listAllPaginated`, `/admin/media`): a filterable grid/gallery, not a `DataTable` row list — browse + delete only, no create/edit form. Also server-side paginated (same unbounded-growth reasoning as Audit Logs — every entity's every photo lives in one table). Cards show an entity-type badge and a "View entity" link straight to that record's own admin edit page rather than pre-resolving `entityId` to a human name inline (would need 6 simultaneous per-entity-type queries for every card). Security note: `mediaItems: read` is granted to every role (Agent, Client too — they need it for their own per-entity upload/delete flows), so `listAllPaginated` independently guarantees `propertySubmission` (the one private-access `MediaEntityType`) rows are never returned under any argument — not just when explicitly requested (throws), but also filtered out of the unscoped "browse everything" case — since this bulk endpoint has no per-row ownership check the way `listByEntity`/`getForDelete` do.
 
 ---
 
