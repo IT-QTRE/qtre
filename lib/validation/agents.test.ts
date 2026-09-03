@@ -10,5 +10,7 @@ describe("agentSchema", () => {
     };
     expect(agentSchema.safeParse(base).success).toBe(true);
     expect(agentSchema.safeParse({ ...base, email: "not-an-email" }).success).toBe(false);
+    expect(agentSchema.safeParse({ ...base, position: "Sales Manager" }).success).toBe(true);
+    expect(agentSchema.safeParse({ ...base, position: "x".repeat(81) }).success).toBe(false);
   });
 });

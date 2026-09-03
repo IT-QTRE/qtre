@@ -34,8 +34,10 @@ export function LeadDeleteAction({ leadId, leadName, open, onOpenChange }: LeadD
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete lead from {leadName}?</AlertDialogTitle>
-          <AlertDialogDescription>This permanently removes the lead. This cannot be undone.</AlertDialogDescription>
+          <AlertDialogTitle>Delete this lead?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {leadName}&apos;s inquiry will be removed. This cannot be undone.
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>

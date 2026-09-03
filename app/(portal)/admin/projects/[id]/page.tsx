@@ -1,31 +1,44 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ProjectForm } from "@/components/admin/projects/project-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { useAuthedQuery } from "@/components/admin/use-authed-query";
 
 export default function ProjectEditPage() {
   const params = useParams<{ id: string }>();
-  const project = useQuery(api.projects.get, { id: params.id as Id<"projects"> });
+  const project = useAuthedQuery(api.projects.get, { id: params.id as Id<"projects"> });
 
   if (project === undefined) {
-    return <p className="text-muted-foreground">Loading…</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/projects" label="Projects" />} title="Project" />
+        <div className="h-48 border border-border bg-muted/60" aria-hidden />
+      </div>
+    );
   }
   if (project === null) {
-    return <p className="text-muted-foreground">Project not found.</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/projects" label="Projects" />} title="Project" />
+        <p className="max-w-prose text-sm text-muted-foreground">This project is not in your catalog.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/projects" label="Back to Projects" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{project.title.en}</h1>
-        <p className="text-muted-foreground">Edit project details.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/projects" label="Projects" />}
+          title={project.title.en}
+          description="Edit project, photos, and publishing."
+        />
+        <ProjectForm mode="edit" project={project} />
       </div>
-      <ProjectForm mode="edit" project={project} />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

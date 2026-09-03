@@ -7,6 +7,7 @@ import { writeAuditLog } from "./lib/auditLog";
 import { localizedTextValidator } from "./lib/localizedText";
 import { seoFieldsValidator } from "./lib/seoFields";
 import { propertySharedFactsValidator } from "./lib/propertyFacts";
+import { furnishingValidator, propertyTypeValidator, rentalPeriodValidator } from "./lib/propertyAttributes";
 
 const statusValidator = v.union(v.literal("draft"), v.literal("published"), v.literal("archived"));
 const listingStatusValidator = v.union(
@@ -55,7 +56,12 @@ const mutationArgs = {
   description: localizedTextValidator,
   city: localizedTextValidator,
   coordinates: v.optional(v.object({ lat: v.number(), lng: v.number() })),
+  address: v.optional(v.string()),
+  placeId: v.optional(v.string()),
   listingStatus: listingStatusValidator,
+  propertyType: v.optional(propertyTypeValidator),
+  furnishing: v.optional(furnishingValidator),
+  rentalPeriod: v.optional(rentalPeriodValidator),
   amenities: v.optional(v.array(v.string())),
   communityId: v.optional(v.id("communities")),
   developerId: v.optional(v.id("developers")),
@@ -120,10 +126,13 @@ export const create = mutation({
     const actor = await requireRole(ctx, "properties", "create");
     await assertSlugAvailable(ctx, args.slug);
 
-    const { slug, status, ...rest } = args;
+    const { slug, status, propertyType, furnishing, rentalPeriod, ...rest } = args;
     const now = Date.now();
     const id = await ctx.db.insert("properties", {
       ...rest,
+      ...(propertyType ? { propertyType } : {}),
+      ...(furnishing ? { furnishing } : {}),
+      ...(rest.listingStatus === "for_rent" && rentalPeriod ? { rentalPeriod } : {}),
       createdBy: actor._id,
       publishing: {
         slug,
@@ -149,9 +158,11 @@ export const update = mutation({
     assertOwnsIfAdmin(actor, existing.createdBy, "Admins can only update properties they created");
     await assertSlugAvailable(ctx, args.slug, args.id);
 
-    const { id, slug, status, ...rest } = args;
+    const { id, slug, status, communityId, developerId, projectId, agentId, address, placeId, coordinates, propertyType, furnishing, rentalPeriod, ...rest } = args;
     const now = Date.now();
-    await ctx.db.patch(id, {
+    const current = withoutSystemFields(existing);
+    const next = {
+      ...current,
       ...rest,
       publishing: {
         slug,
@@ -159,10 +170,74 @@ export const update = mutation({
         updatedAt: now,
         publishedAt: status === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
       },
-    });
+    };
+    if (communityId) next.communityId = communityId;
+    else delete next.communityId;
+    if (developerId) next.developerId = developerId;
+    else delete next.developerId;
+    if (projectId) next.projectId = projectId;
+    else delete next.projectId;
+    if (agentId) next.agentId = agentId;
+    else delete next.agentId;
+    if (address) next.address = address;
+    else delete next.address;
+    if (placeId) next.placeId = placeId;
+    else delete next.placeId;
+    if (coordinates) next.coordinates = coordinates;
+    else delete next.coordinates;
+    if (propertyType) next.propertyType = propertyType;
+    else delete next.propertyType;
+    if (furnishing) next.furnishing = furnishing;
+    else delete next.furnishing;
+    if (rest.listingStatus === "for_rent" && rentalPeriod) next.rentalPeriod = rentalPeriod;
+    else delete next.rentalPeriod;
+    await ctx.db.replace(id, next);
     await writeAuditLog(ctx, { actorUserId: actor._id, resource: "properties", action: "update", targetId: id });
   },
 });
+
+export const setPublishingStatus = mutation({
+  args: {
+    id: v.id("properties"),
+    status: v.union(v.literal("draft"), v.literal("published")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const actor = await requireRole(ctx, "properties", "update");
+    const existing = await ctx.db.get(args.id);
+    if (!existing) {
+      throw new Error("Property not found");
+    }
+    await assertCanUpdate(ctx, actor, existing);
+    assertOwnsIfAdmin(actor, existing.createdBy, "Admins can only update properties they created");
+
+    if (existing.publishing.status === args.status) {
+      return null;
+    }
+
+    const now = Date.now();
+    const current = withoutSystemFields(existing);
+    await ctx.db.replace(args.id, {
+      ...current,
+      publishing: {
+        ...existing.publishing,
+        status: args.status,
+        updatedAt: now,
+        publishedAt: args.status === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
+      },
+    });
+    await writeAuditLog(ctx, { actorUserId: actor._id, resource: "properties", action: "update", targetId: args.id });
+    return null;
+  },
+});
+
+function withoutSystemFields<T extends { _id: Id<"properties">; _creationTime: number }>(doc: T): Omit<T, "_id" | "_creationTime"> {
+  const { _id, _creationTime, ...fields } = doc;
+  if (!_id || !_creationTime) {
+    throw new Error("Property document is missing system fields");
+  }
+  return fields;
+}
 
 export const remove = mutation({
   args: { id: v.id("properties") },

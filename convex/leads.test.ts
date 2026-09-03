@@ -74,6 +74,23 @@ describe("leads.list", () => {
   });
 });
 
+describe("leads.newCount", () => {
+  test("rejects an unauthenticated caller", async () => {
+    const t = convexTest(schema, modules);
+    await expect(t.query(api.leads.newCount, {})).rejects.toThrow(ForbiddenError);
+  });
+
+  test("counts only new leads", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    await seedLead(t);
+    await seedLead(t, { status: "contacted" });
+    await seedLead(t, { status: "closed" });
+
+    expect(await asAdmin.query(api.leads.newCount, {})).toBe(1);
+  });
+});
+
 describe("leads.update", () => {
   test("rejects a client caller", async () => {
     const t = convexTest(schema, modules);

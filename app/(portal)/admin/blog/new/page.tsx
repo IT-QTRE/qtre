@@ -1,17 +1,20 @@
 "use client";
 
 import { BlogPostForm } from "@/components/admin/blog-posts/blog-post-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 export default function NewBlogPostPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/blog" label="Back to Blog" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Add Post</h1>
-        <p className="text-muted-foreground">Create a new blog post.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/blog" label="Blog" />}
+          title="New post"
+          description="Write an article for the public site."
+        />
+        <BlogPostForm mode="create" />
       </div>
-      <BlogPostForm mode="create" />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

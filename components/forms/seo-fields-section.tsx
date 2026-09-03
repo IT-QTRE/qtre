@@ -25,8 +25,12 @@ export function SeoFieldsSection({
   descriptionPlaceholder,
   canonicalPlaceholder,
 }: SeoFieldsSectionProps) {
-  const { register } = useFormContext();
+  const { register, formState } = useFormContext();
   const canonicalId = `${idPrefix}-canonical`;
+  const canonicalError =
+    formState.errors.seo && typeof formState.errors.seo === "object" && "canonicalPath" in formState.errors.seo
+      ? (formState.errors.seo.canonicalPath as { message?: string } | undefined)?.message
+      : undefined;
 
   return (
     <>
@@ -47,8 +51,9 @@ export function SeoFieldsSection({
       />
       <div className="space-y-1">
         <Label htmlFor={canonicalId}>Canonical Path</Label>
-        <Input id={canonicalId} placeholder={canonicalPlaceholder} {...register("seo.canonicalPath")} />
+        <Input id={canonicalId} placeholder={canonicalPlaceholder} autoComplete="off" {...register("seo.canonicalPath")} />
         <FieldHint>Only set this if this content is a duplicate of another page — leave blank otherwise.</FieldHint>
+        {canonicalError ? <p className="text-sm text-destructive">{canonicalError}</p> : null}
       </div>
     </>
   );

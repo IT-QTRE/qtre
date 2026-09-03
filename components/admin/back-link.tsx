@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 // dedicated link back to the list is worth the vertical space.
 export function BackLink({ href, label }: { href: string; label: string }) {
   return (
-    <Button variant="ghost" size="sm" className="-ml-3" nativeButton={false} render={<Link href={href} />}>
+    <Button variant="ghost" size="sm" className="-ml-3 mb-2 h-8 px-2 text-muted-foreground" nativeButton={false} render={<Link href={href} />}>
       <ArrowLeft className="size-4" />
       {label}
     </Button>

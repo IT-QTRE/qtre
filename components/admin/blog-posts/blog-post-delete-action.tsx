@@ -34,9 +34,9 @@ export function BlogPostDeleteAction({ blogPostId, blogPostTitle, open, onOpenCh
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete &quot;{blogPostTitle}&quot;?</AlertDialogTitle>
+          <AlertDialogTitle>Delete this post?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the blog post. This cannot be undone.
+            &quot;{blogPostTitle}&quot; will be removed. This cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -46,13 +46,13 @@ export function BlogPostDeleteAction({ blogPostId, blogPostTitle, open, onOpenCh
             onClick={async () => {
               try {
                 await removeBlogPost({ id: blogPostId });
-                toast.success("Blog post deleted");
+                toast.success("Post deleted");
                 onOpenChange(false);
               } catch (error) {
                 // Keep the dialog open on failure so the error toast is
                 // actually readable instead of the whole dialog vanishing
                 // at the same instant.
-                toast.error(error instanceof Error ? error.message : "Failed to delete blog post");
+                toast.error(error instanceof Error ? error.message : "Failed to delete post");
               }
             }}
           >

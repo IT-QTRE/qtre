@@ -255,6 +255,75 @@ describe("properties.update", () => {
     ).rejects.toThrow(ForbiddenError);
   });
 
+  test("clears an optional community relation when omitted on update", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const communityId = await t.run(async (ctx) =>
+      ctx.db.insert("communities", {
+        name: { en: "Marina" },
+        city: { en: "Dubai" },
+        countryCode: "AE",
+        publishing: { slug: "marina", status: "published", updatedAt: Date.now() },
+      }),
+    );
+    const id = await asAdmin.mutation(api.properties.create, { ...baseArgs, communityId });
+    expect((await asAdmin.query(api.properties.get, { id }))?.communityId).toBe(communityId);
+
+    await asAdmin.mutation(api.properties.update, { id, ...baseArgs });
+    expect((await asAdmin.query(api.properties.get, { id }))?.communityId).toBeUndefined();
+  });
+
+  test("clears optional location fields when omitted on update", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.properties.create, {
+      ...baseArgs,
+      address: "Marina Heights, Dubai Marina",
+      placeId: "ChIJtest",
+      coordinates: { lat: 25.077, lng: 55.139 },
+    });
+    expect((await asAdmin.query(api.properties.get, { id }))?.coordinates).toEqual({ lat: 25.077, lng: 55.139 });
+
+    await asAdmin.mutation(api.properties.update, { id, ...baseArgs });
+    const updated = await asAdmin.query(api.properties.get, { id });
+    expect(updated?.address).toBeUndefined();
+    expect(updated?.placeId).toBeUndefined();
+    expect(updated?.coordinates).toBeUndefined();
+  });
+
+  test("stores optional type, furnishing, and rental period, and drops them when omitted", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.properties.create, {
+      ...baseArgs,
+      listingStatus: "for_rent",
+      propertyType: "apartment",
+      furnishing: "unfurnished",
+      rentalPeriod: "yearly",
+    });
+    const created = await asAdmin.query(api.properties.get, { id });
+    expect(created?.propertyType).toBe("apartment");
+    expect(created?.furnishing).toBe("unfurnished");
+    expect(created?.rentalPeriod).toBe("yearly");
+
+    await asAdmin.mutation(api.properties.update, { id, ...baseArgs, listingStatus: "for_sale" });
+    const updated = await asAdmin.query(api.properties.get, { id });
+    expect(updated?.propertyType).toBeUndefined();
+    expect(updated?.furnishing).toBeUndefined();
+    expect(updated?.rentalPeriod).toBeUndefined();
+  });
+
+  test("does not persist rental period on a sale listing", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.properties.create, {
+      ...baseArgs,
+      listingStatus: "for_sale",
+      rentalPeriod: "yearly",
+    });
+    expect((await asAdmin.query(api.properties.get, { id }))?.rentalPeriod).toBeUndefined();
+  });
+
   test("a super_admin can update a property created by any admin", async () => {
     const t = convexTest(schema, modules);
     const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
@@ -306,5 +375,68 @@ describe("properties.remove", () => {
     const id = await asAdmin.mutation(api.properties.create, baseArgs);
 
     await expect(asSuperAdmin.mutation(api.properties.remove, { id })).resolves.toBeNull();
+  });
+});
+
+describe("properties.setPublishingStatus", () => {
+  test("publishes a draft, keeps the slug, and sets publishedAt", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.properties.create, baseArgs);
+
+    await asAdmin.mutation(api.properties.setPublishingStatus, { id, status: "published" });
+    const doc = await asAdmin.query(api.properties.get, { id });
+    expect(doc?.publishing.status).toBe("published");
+    expect(doc?.publishing.slug).toBe("marina-unit-101");
+    expect(doc?.publishing.publishedAt).toEqual(expect.any(Number));
+  });
+
+  test("moves a published listing to draft without clearing publishedAt or slug", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.properties.create, { ...baseArgs, status: "published" });
+    const published = await asAdmin.query(api.properties.get, { id });
+
+    await asAdmin.mutation(api.properties.setPublishingStatus, { id, status: "draft" });
+    const doc = await asAdmin.query(api.properties.get, { id });
+    expect(doc?.publishing.status).toBe("draft");
+    expect(doc?.publishing.slug).toBe("marina-unit-101");
+    expect(doc?.publishing.publishedAt).toBe(published?.publishing.publishedAt);
+  });
+
+  test("rejects an admin toggling a property another admin created", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin1 } = await seedUser(t, "clerk|admin-1", "admin");
+    const { client: asAdmin2 } = await seedUser(t, "clerk|admin-2", "admin");
+    const id = await asAdmin1.mutation(api.properties.create, baseArgs);
+
+    await expect(asAdmin2.mutation(api.properties.setPublishingStatus, { id, status: "published" })).rejects.toThrow(
+      ForbiddenError,
+    );
+  });
+
+  test("an agent can publish a property assigned to their own agent profile", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const { client: asAgent, userId: agentUserId } = await seedUser(t, "clerk|agent-1", "agent");
+    const agentProfileId = await seedAgentProfile(t, agentUserId);
+    const id = await asAdmin.mutation(api.properties.create, { ...baseArgs, agentId: agentProfileId });
+
+    await expect(asAgent.mutation(api.properties.setPublishingStatus, { id, status: "published" })).resolves.toBeNull();
+  });
+
+  test("rejects an agent publishing a property assigned to a different agent", async () => {
+    const t = convexTest(schema, modules);
+    const { client: asAdmin } = await seedUser(t, "clerk|admin-1", "admin");
+    const { userId: ownerAgentUserId } = await seedUser(t, "clerk|agent-owner", "agent");
+    const ownerAgentProfileId = await seedAgentProfile(t, ownerAgentUserId);
+    const id = await asAdmin.mutation(api.properties.create, { ...baseArgs, agentId: ownerAgentProfileId });
+
+    const { client: asOtherAgent, userId: otherAgentUserId } = await seedUser(t, "clerk|agent-other", "agent");
+    await seedAgentProfile(t, otherAgentUserId);
+
+    await expect(asOtherAgent.mutation(api.properties.setPublishingStatus, { id, status: "published" })).rejects.toThrow(
+      ForbiddenError,
+    );
   });
 });

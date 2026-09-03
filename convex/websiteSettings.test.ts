@@ -28,6 +28,23 @@ const baseArgs = {
   siteName: "Qtre",
 };
 
+describe("websiteSettings.publicGet", () => {
+  test("is callable without auth and omits admin-only fields", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await asAdmin.mutation(api.websiteSettings.upsert, {
+      siteName: "Qtre Homes",
+      contactEmail: "hello@qtre.test",
+      defaultSeo: { seoTitle: { en: "secret-default" } },
+    });
+
+    const publicSettings = await t.query(api.websiteSettings.publicGet, {});
+    expect(publicSettings?.siteName).toBe("Qtre Homes");
+    expect(publicSettings?.contactEmail).toBe("hello@qtre.test");
+    expect(publicSettings).not.toHaveProperty("defaultSeo");
+  });
+});
+
 describe("websiteSettings.get", () => {
   test("rejects an unauthenticated caller", async () => {
     const t = convexTest(schema, modules);
@@ -139,6 +156,61 @@ describe("websiteSettings.upsert", () => {
     expect(settings?.contactPhone).toBeUndefined();
     expect(settings?.socialLinks).toBeUndefined();
     expect(settings?.defaultSeo).toBeUndefined();
+    expect(settings?.contactFormUrl).toBeUndefined();
+    expect(settings?.contactWhatsapp).toBeUndefined();
+  });
+
+  test("stores an allowlisted contact form URL", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await asAdmin.mutation(api.websiteSettings.upsert, {
+      siteName: "Qtre",
+      contactFormUrl: "https://api.leadconnectorhq.com/widget/form/abc123",
+    });
+    const settings = await asAdmin.query(api.websiteSettings.get, {});
+    expect(settings?.contactFormUrl).toBe("https://api.leadconnectorhq.com/widget/form/abc123");
+    const publicSettings = await t.query(api.websiteSettings.publicGet, {});
+    expect(publicSettings?.contactFormUrl).toBe("https://api.leadconnectorhq.com/widget/form/abc123");
+  });
+
+  test("rejects a contact form URL that is not GoHighLevel", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await expect(
+      asAdmin.mutation(api.websiteSettings.upsert, {
+        siteName: "Qtre",
+        contactFormUrl: "https://evil.example/form",
+      }),
+    ).rejects.toThrow("Paste the form iframe src, not the embed script.");
+  });
+
+  test("publicGet omits a stored form URL that is not allowlisted", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("websiteSettings", {
+        siteName: "Qtre",
+        contactFormUrl: "https://evil.example/form",
+        updatedAt: Date.now(),
+      });
+    });
+    const publicSettings = await t.query(api.websiteSettings.publicGet, {});
+    expect(publicSettings?.contactFormUrl).toBeUndefined();
+  });
+
+  test("stores a WhatsApp number and rejects a short value", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await asAdmin.mutation(api.websiteSettings.upsert, {
+      siteName: "Qtre",
+      contactWhatsapp: "+971 50 123 4567",
+    });
+    const settings = await asAdmin.query(api.websiteSettings.get, {});
+    expect(settings?.contactWhatsapp).toBe("+971 50 123 4567");
+    const publicSettings = await t.query(api.websiteSettings.publicGet, {});
+    expect(publicSettings?.contactWhatsapp).toBe("+971 50 123 4567");
+    await expect(
+      asAdmin.mutation(api.websiteSettings.upsert, { siteName: "Qtre", contactWhatsapp: "123" }),
+    ).rejects.toThrow("Enter a WhatsApp number or wa.me link");
   });
 });
 

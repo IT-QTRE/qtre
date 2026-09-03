@@ -44,7 +44,7 @@ function toToggleableSet(resources: string[] | undefined): Set<ToggleableResourc
 }
 
 // Super Admin only — this dialog is only ever rendered for rows where
-// `user.role === "admin"` (see getUserColumns), and `updateResourceAccess`
+// `user.role === "admin"` (see user-list.tsx), and `updateResourceAccess`
 // independently enforces the same super_admin-only + admin-target-only
 // rule server-side regardless of what the client renders.
 export function ManageAccessDialog({ user }: { user: Doc<"users"> }) {
@@ -88,8 +88,8 @@ export function ManageAccessDialog({ user }: { user: Doc<"users"> }) {
         }
       }}
     >
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
-        <ShieldCheck className="size-4" />
+      <DialogTrigger render={<Button variant="outline" className="min-h-11 touch-manipulation" />}>
+        <ShieldCheck className="size-4" aria-hidden />
         Manage Access
       </DialogTrigger>
       <DialogContent>
@@ -106,9 +106,10 @@ export function ManageAccessDialog({ user }: { user: Doc<"users"> }) {
               <button
                 key={resource}
                 type="button"
+                aria-pressed={isEnabled}
                 onClick={() => toggle(resource)}
                 className={cn(
-                  "flex items-center justify-between rounded-md border p-3 text-left text-sm transition-colors hover:bg-muted/50",
+                  "flex min-h-11 items-center justify-between border p-3 text-left text-sm transition-colors hover:bg-muted/50",
                   !isEnabled && "border-destructive/30 bg-destructive/5",
                 )}
               >
@@ -119,10 +120,10 @@ export function ManageAccessDialog({ user }: { user: Doc<"users"> }) {
           })}
         </div>
         <DialogFooter>
-          <DialogClose disabled={isSaving} render={<Button variant="outline" />}>
+          <DialogClose disabled={isSaving} render={<Button variant="outline" className="min-h-11" />}>
             Cancel
           </DialogClose>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button className="min-h-11" onClick={handleSave} disabled={isSaving}>
             {isSaving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>

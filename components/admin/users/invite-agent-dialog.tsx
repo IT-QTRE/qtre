@@ -55,8 +55,8 @@ export function InviteAgentDialog() {
         }
       }}
     >
-      <DialogTrigger render={<Button />}>
-        <UserPlus className="size-4" />
+      <DialogTrigger render={<Button className="min-h-11 touch-manipulation" />}>
+        <UserPlus className="size-4" aria-hidden />
         Invite Agent
       </DialogTrigger>
       <DialogContent>
@@ -73,7 +73,8 @@ export function InviteAgentDialog() {
               id="invite-agent-email"
               type="email"
               autoComplete="email"
-              placeholder="agent@example.com"
+              placeholder="agent@example.com…"
+              spellCheck={false}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               disabled={isSubmitting}
@@ -81,10 +82,10 @@ export function InviteAgentDialog() {
             />
           </div>
           <DialogFooter>
-            <DialogClose disabled={isSubmitting} render={<Button variant="outline" />}>
+            <DialogClose disabled={isSubmitting} render={<Button variant="outline" className="min-h-11" />}>
               Cancel
             </DialogClose>
-            <Button type="submit" disabled={!canSubmit}>
+            <Button type="submit" className="min-h-11" disabled={!canSubmit}>
               {isSubmitting ? "Sending…" : "Send Invite"}
             </Button>
           </DialogFooter>

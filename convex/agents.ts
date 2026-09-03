@@ -19,6 +19,14 @@ async function assertSlugAvailable(ctx: MutationCtx, slug: string, excludeId?: I
   }
 }
 
+function withoutSystemFields<T extends { _id: Id<"agents">; _creationTime: number }>(doc: T): Omit<T, "_id" | "_creationTime"> {
+  const { _id, _creationTime, ...fields } = doc;
+  if (!_id || !_creationTime) {
+    throw new Error("Agent document is missing system fields");
+  }
+  return fields;
+}
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -38,6 +46,7 @@ export const get = query({
 export const create = mutation({
   args: {
     name: v.string(),
+    position: v.optional(v.string()),
     bio: v.optional(localizedTextValidator),
     email: v.string(),
     phone: v.optional(v.string()),
@@ -50,10 +59,11 @@ export const create = mutation({
     const actor = await requireRole(ctx, "agents", "create");
     await assertSlugAvailable(ctx, args.slug);
 
-    const { slug, status, ...rest } = args;
+    const { slug, status, position, ...rest } = args;
     const now = Date.now();
     const id = await ctx.db.insert("agents", {
       ...rest,
+      ...(position ? { position } : {}),
       publishing: {
         slug,
         status,
@@ -70,6 +80,7 @@ export const update = mutation({
   args: {
     id: v.id("agents"),
     name: v.string(),
+    position: v.optional(v.string()),
     bio: v.optional(localizedTextValidator),
     email: v.string(),
     phone: v.optional(v.string()),
@@ -86,9 +97,11 @@ export const update = mutation({
     }
     await assertSlugAvailable(ctx, args.slug, args.id);
 
-    const { id, slug, status, ...rest } = args;
+    const { id, slug, status, bio, phone, seo, userId, position, ...rest } = args;
     const now = Date.now();
-    await ctx.db.patch(id, {
+    const current = withoutSystemFields(existing);
+    const next = {
+      ...current,
       ...rest,
       publishing: {
         slug,
@@ -96,8 +109,51 @@ export const update = mutation({
         updatedAt: now,
         publishedAt: status === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
       },
-    });
+    };
+    if (userId) next.userId = userId;
+    else if (existing.userId) next.userId = existing.userId;
+    else delete next.userId;
+    if (position) next.position = position;
+    else delete next.position;
+    if (bio) next.bio = bio;
+    else delete next.bio;
+    if (phone) next.phone = phone;
+    else delete next.phone;
+    if (seo) next.seo = seo;
+    else delete next.seo;
+    await ctx.db.replace(id, next);
     await writeAuditLog(ctx, { actorUserId: actor._id, resource: "agents", action: "update", targetId: id });
+  },
+});
+
+export const setPublishingStatus = mutation({
+  args: {
+    id: v.id("agents"),
+    status: v.union(v.literal("draft"), v.literal("published")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const actor = await requireRole(ctx, "agents", "update");
+    const existing = await ctx.db.get(args.id);
+    if (!existing) {
+      throw new Error("Agent not found");
+    }
+
+    if (existing.publishing.status === args.status) {
+      return null;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      publishing: {
+        ...existing.publishing,
+        status: args.status,
+        updatedAt: now,
+        publishedAt: args.status === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
+      },
+    });
+    await writeAuditLog(ctx, { actorUserId: actor._id, resource: "agents", action: "update", targetId: args.id });
+    return null;
   },
 });
 

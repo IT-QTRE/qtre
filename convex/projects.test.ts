@@ -151,6 +151,18 @@ describe("projects.create", () => {
       asAdmin.mutation(api.projects.create, { ...baseArgs(developerId), title: { en: "Another" } }),
     ).rejects.toThrow();
   });
+
+  test("stores an optional portal-style completion date", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const developerId = await seedDeveloper(t);
+    const id = await asAdmin.mutation(api.projects.create, {
+      ...baseArgs(developerId),
+      completionDate: { quarter: 4, year: 2027 },
+    });
+    const doc = await asAdmin.query(api.projects.get, { id });
+    expect(doc?.completionDate).toEqual({ quarter: 4, year: 2027 });
+  });
 });
 
 describe("projects.update", () => {
@@ -214,6 +226,20 @@ describe("projects.update", () => {
     await expect(
       asSuperAdmin.mutation(api.projects.update, { id, ...baseArgs(developerId), title: { en: "Super Admin Edited" } }),
     ).resolves.toBeNull();
+  });
+
+  test("clears completionDate when the update omits it", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const developerId = await seedDeveloper(t);
+    const id = await asAdmin.mutation(api.projects.create, {
+      ...baseArgs(developerId),
+      completionDate: { quarter: 4, year: 2027 },
+    });
+
+    await asAdmin.mutation(api.projects.update, { id, ...baseArgs(developerId) });
+    const updated = await asAdmin.query(api.projects.get, { id });
+    expect(updated?.completionDate).toBeUndefined();
   });
 });
 
@@ -290,5 +316,46 @@ describe("projects.remove", () => {
     const id = await asAdmin.mutation(api.projects.create, baseArgs(developerId));
 
     await expect(asSuperAdmin.mutation(api.projects.remove, { id })).resolves.toBeNull();
+  });
+});
+
+describe("projects.setPublishingStatus", () => {
+  test("publishes a draft, keeps the slug, and sets publishedAt", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const developerId = await seedDeveloper(t);
+    const id = await asAdmin.mutation(api.projects.create, baseArgs(developerId));
+
+    await asAdmin.mutation(api.projects.setPublishingStatus, { id, status: "published" });
+    const doc = await asAdmin.query(api.projects.get, { id });
+    expect(doc?.publishing.status).toBe("published");
+    expect(doc?.publishing.slug).toBe("marina-heights");
+    expect(doc?.publishing.publishedAt).toEqual(expect.any(Number));
+  });
+
+  test("moves a published project to draft without clearing publishedAt or slug", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const developerId = await seedDeveloper(t);
+    const id = await asAdmin.mutation(api.projects.create, { ...baseArgs(developerId), publishingStatus: "published" });
+    const published = await asAdmin.query(api.projects.get, { id });
+
+    await asAdmin.mutation(api.projects.setPublishingStatus, { id, status: "draft" });
+    const doc = await asAdmin.query(api.projects.get, { id });
+    expect(doc?.publishing.status).toBe("draft");
+    expect(doc?.publishing.slug).toBe("marina-heights");
+    expect(doc?.publishing.publishedAt).toBe(published?.publishing.publishedAt);
+  });
+
+  test("rejects an admin toggling a project another admin created", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin1 = await seedUser(t, "clerk|admin-1", "admin");
+    const asAdmin2 = await seedUser(t, "clerk|admin-2", "admin");
+    const developerId = await seedDeveloper(t);
+    const id = await asAdmin1.mutation(api.projects.create, baseArgs(developerId));
+
+    await expect(asAdmin2.mutation(api.projects.setPublishingStatus, { id, status: "published" })).rejects.toThrow(
+      ForbiddenError,
+    );
   });
 });

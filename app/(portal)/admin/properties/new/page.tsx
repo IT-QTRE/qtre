@@ -1,17 +1,20 @@
 "use client";
 
 import { PropertyForm } from "@/components/admin/properties/property-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 export default function NewPropertyPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/properties" label="Back to Properties" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Add Property</h1>
-        <p className="text-muted-foreground">Create a new property listing.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/properties" label="Properties" />}
+          title="New property"
+          description="Add a sale or rent listing to the catalog."
+        />
+        <PropertyForm mode="create" />
       </div>
-      <PropertyForm mode="create" />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

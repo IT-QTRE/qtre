@@ -16,6 +16,14 @@ describe("propertySchema", () => {
       publishing: { slug: "marina-view-apartment", status: "published", updatedAt: Date.now() },
     };
     expect(propertySchema.safeParse(valid).success).toBe(true);
+    expect(
+      propertySchema.safeParse({
+        ...valid,
+        title: { en: "Marina View Apartment", ar: "", tr: "" },
+        description: { en: "A stunning apartment with marina views.", ar: "", tr: "" },
+        city: { en: "Dubai", ar: "", tr: "" },
+      }).success,
+    ).toBe(true);
     const { title: _title, ...missingTitle } = valid;
     expect(propertySchema.safeParse(missingTitle).success).toBe(false);
   });
@@ -34,5 +42,31 @@ describe("propertySchema", () => {
     };
     expect(propertySchema.safeParse({ ...base, listingStatus: "for_sale" }).success).toBe(true);
     expect(propertySchema.safeParse({ ...base, listingStatus: "leased" }).success).toBe(false);
+  });
+
+  it("accepts known property type, furnishing, and rental period values", () => {
+    const base = {
+      price: 1,
+      bedrooms: 1,
+      bathrooms: 1,
+      areaSqft: 1,
+      countryCode: "AE",
+      title: { en: "x" },
+      description: { en: "x" },
+      city: { en: "x" },
+      listingStatus: "for_rent" as const,
+      publishing: { slug: "x", status: "published" as const, updatedAt: Date.now() },
+    };
+    expect(
+      propertySchema.safeParse({
+        ...base,
+        propertyType: "apartment",
+        furnishing: "unfurnished",
+        rentalPeriod: "yearly",
+      }).success,
+    ).toBe(true);
+    expect(propertySchema.safeParse({ ...base, propertyType: "warehouse" }).success).toBe(false);
+    expect(propertySchema.safeParse({ ...base, furnishing: "luxury" }).success).toBe(false);
+    expect(propertySchema.safeParse({ ...base, rentalPeriod: "weekly" }).success).toBe(false);
   });
 });

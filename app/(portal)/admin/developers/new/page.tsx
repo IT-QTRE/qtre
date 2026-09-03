@@ -1,17 +1,20 @@
 "use client";
 
 import { DeveloperForm } from "@/components/admin/developers/developer-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 export default function NewDeveloperPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/developers" label="Back to Developers" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Add Developer</h1>
-        <p className="text-muted-foreground">Create a new developer profile.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/developers" label="Developers" />}
+          title="New developer"
+          description="Add a developer house to the catalog."
+        />
+        <DeveloperForm mode="create" />
       </div>
-      <DeveloperForm mode="create" />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

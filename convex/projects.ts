@@ -6,6 +6,8 @@ import { requireRole, assertOwnsIfAdmin, isHiddenFromAdmin } from "./lib/permiss
 import { writeAuditLog } from "./lib/auditLog";
 import { localizedTextValidator } from "./lib/localizedText";
 import { seoFieldsValidator } from "./lib/seoFields";
+import { bedroomTypesValidator, normalizeUnitTypes, unitTypesValidator } from "./lib/bedroomTypes";
+import { completionDateValidator } from "./lib/completionDate";
 
 const publishingStatusValidator = v.union(v.literal("draft"), v.literal("published"), v.literal("archived"));
 const projectStatusValidator = v.union(
@@ -47,8 +49,13 @@ const mutationArgs = {
   countryCode: v.string(),
   city: localizedTextValidator,
   status: projectStatusValidator,
+  completionDate: v.optional(completionDateValidator),
   startingPrice: v.optional(v.number()),
+  bedroomTypes: v.optional(bedroomTypesValidator),
+  unitTypes: v.optional(unitTypesValidator),
   coordinates: v.optional(v.object({ lat: v.number(), lng: v.number() })),
+  address: v.optional(v.string()),
+  placeId: v.optional(v.string()),
   amenities: v.optional(v.array(v.string())),
   paymentPlan: v.optional(
     v.array(v.object({ label: v.string(), percentage: v.number(), note: v.optional(v.string()) })),
@@ -113,10 +120,13 @@ export const create = mutation({
     const actor = await requireRole(ctx, "projects", "create");
     await assertSlugAvailable(ctx, args.slug);
 
-    const { slug, publishingStatus, ...rest } = args;
+    const { slug, publishingStatus, bedroomTypes, unitTypes, ...rest } = args;
     const now = Date.now();
+    const specs = normalizeUnitTypes(unitTypes ?? (bedroomTypes ?? []).map((bedrooms) => ({ bedrooms })));
+    const layouts = specs.map((spec) => spec.bedrooms);
     const id = await ctx.db.insert("projects", {
       ...rest,
+      ...(layouts.length > 0 ? { bedroomTypes: layouts, unitTypes: specs } : {}),
       createdBy: actor._id,
       publishing: {
         slug,
@@ -141,9 +151,27 @@ export const update = mutation({
     assertOwnsIfAdmin(actor, existing.createdBy, "Admins can only update projects they created");
     await assertSlugAvailable(ctx, args.slug, args.id);
 
-    const { id, slug, publishingStatus, ...rest } = args;
+    const {
+      id,
+      slug,
+      publishingStatus,
+      communityId,
+      completionDate,
+      startingPrice,
+      bedroomTypes,
+      unitTypes,
+      coordinates,
+      address,
+      placeId,
+      amenities,
+      paymentPlan,
+      seo,
+      ...rest
+    } = args;
     const now = Date.now();
-    await ctx.db.patch(id, {
+    const current = withoutSystemFields(existing);
+    const next = {
+      ...current,
       ...rest,
       publishing: {
         slug,
@@ -151,10 +179,77 @@ export const update = mutation({
         updatedAt: now,
         publishedAt: publishingStatus === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
       },
-    });
+    };
+    if (communityId) next.communityId = communityId;
+    else delete next.communityId;
+    if (completionDate) next.completionDate = completionDate;
+    else delete next.completionDate;
+    if (startingPrice !== undefined) next.startingPrice = startingPrice;
+    else delete next.startingPrice;
+    if (coordinates) next.coordinates = coordinates;
+    else delete next.coordinates;
+    if (address) next.address = address;
+    else delete next.address;
+    if (placeId) next.placeId = placeId;
+    else delete next.placeId;
+    const specs = normalizeUnitTypes(unitTypes ?? (bedroomTypes ?? []).map((bedrooms) => ({ bedrooms })));
+    if (specs.length > 0) {
+      next.bedroomTypes = specs.map((spec) => spec.bedrooms);
+      next.unitTypes = specs;
+    } else {
+      delete next.bedroomTypes;
+      delete next.unitTypes;
+    }
+    if (amenities) next.amenities = amenities;
+    else delete next.amenities;
+    if (paymentPlan) next.paymentPlan = paymentPlan;
+    else delete next.paymentPlan;
+    if (seo) next.seo = seo;
+    else delete next.seo;
+    await ctx.db.replace(id, next);
     await writeAuditLog(ctx, { actorUserId: actor._id, resource: "projects", action: "update", targetId: id });
   },
 });
+
+export const setPublishingStatus = mutation({
+  args: {
+    id: v.id("projects"),
+    status: v.union(v.literal("draft"), v.literal("published")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const actor = await requireRole(ctx, "projects", "update");
+    const existing = await ctx.db.get(args.id);
+    if (!existing) {
+      throw new Error("Project not found");
+    }
+    assertOwnsIfAdmin(actor, existing.createdBy, "Admins can only update projects they created");
+
+    if (existing.publishing.status === args.status) {
+      return null;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      publishing: {
+        ...existing.publishing,
+        status: args.status,
+        updatedAt: now,
+        publishedAt: args.status === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
+      },
+    });
+    await writeAuditLog(ctx, { actorUserId: actor._id, resource: "projects", action: "update", targetId: args.id });
+    return null;
+  },
+});
+
+function withoutSystemFields<T extends { _id: Id<"projects">; _creationTime: number }>(doc: T): Omit<T, "_id" | "_creationTime"> {
+  const { _id, _creationTime, ...fields } = doc;
+  if (!_id || !_creationTime) {
+    throw new Error("Project document is missing system fields");
+  }
+  return fields;
+}
 
 export const remove = mutation({
   args: { id: v.id("projects") },

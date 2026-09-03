@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { MediaEntityType } from "@/convex/lib/mediaEntityType";
 import { MEDIA_ACCESS_CONFIG } from "@/convex/lib/mediaAccessConfig";
+import { usesPortraitCrop } from "@/lib/media/portraitCrop";
+import { PortraitCropDialog } from "./portrait-crop-dialog";
 
 export type PendingMediaFile = { id: string; file: File; previewUrl: string };
 
@@ -24,14 +26,29 @@ export function MediaPicker({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const config = MEDIA_ACCESS_CONFIG[entityType];
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
+  const portrait = usesPortraitCrop(entityType);
 
-  function addFiles(files: FileList) {
+  function addFiles(files: FileList | File[]) {
     const additions = Array.from(files).map((file) => ({
       id: crypto.randomUUID(),
       file,
       previewUrl: URL.createObjectURL(file),
     }));
     onChange([...value, ...additions]);
+  }
+
+  function handleFiles(files: FileList) {
+    if (portrait) {
+      setCropQueue((current) => [...current, ...Array.from(files).filter((file) => file.type.startsWith("image/"))]);
+      return;
+    }
+    addFiles(files);
+  }
+
+  function confirmCrop(cropped: File) {
+    addFiles([cropped]);
+    setCropQueue((current) => current.slice(1));
   }
 
   function remove(id: string) {
@@ -46,12 +63,12 @@ export function MediaPicker({
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault();
-          if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
+          if (event.dataTransfer.files.length) handleFiles(event.dataTransfer.files);
         }}
         className="cursor-pointer rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground"
         onClick={() => fileInputRef.current?.click()}
       >
-        Drop photos here or click to select — they&apos;ll upload once you save.
+        {portrait ? "Drop a portrait or click to add" : "Drop photos here or click to add"}
         <input
           ref={fileInputRef}
           type="file"
@@ -59,21 +76,42 @@ export function MediaPicker({
           accept={config.allowedContentTypes.join(",")}
           className="hidden"
           onChange={(event) => {
-            if (event.target.files?.length) addFiles(event.target.files);
+            if (event.target.files?.length) handleFiles(event.target.files);
             event.target.value = "";
           }}
         />
       </div>
+      {portrait ? (
+        <p className="text-xs text-muted-foreground">
+          You'll frame a 3:4 portrait next — keep the head at the top, head to shoulders or chest.
+        </p>
+      ) : null}
       {value.length > 0 && (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {value.map((item) => (
-            <li key={item.id} className="group relative aspect-square overflow-hidden rounded-lg border border-border">
+          {value.map((item, index) => (
+            <li
+              key={item.id}
+              className={
+                portrait
+                  ? "relative aspect-3/4 overflow-hidden rounded-lg border border-border"
+                  : "relative aspect-square overflow-hidden rounded-lg border border-border"
+              }
+            >
               {/* eslint-disable-next-line @next/next/no-img-element -- local object-URL preview of a not-yet-uploaded file, not a next/image-optimizable remote asset */}
-              <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+              <img
+                src={item.previewUrl}
+                alt=""
+                className={portrait ? "h-full w-full object-cover object-top" : "h-full w-full object-cover"}
+              />
+              {index === 0 ? (
+                <span className="absolute bottom-1 left-1 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-medium">
+                  Cover
+                </span>
+              ) : null}
               <button
                 type="button"
                 onClick={() => remove(item.id)}
-                className="absolute right-1 top-1 z-10 rounded-full bg-background/80 px-2 py-1 text-xs opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute right-1 top-1 z-10 rounded-full bg-background/90 px-2.5 py-1.5 text-xs shadow-sm"
               >
                 Remove
               </button>
@@ -81,6 +119,12 @@ export function MediaPicker({
           ))}
         </ul>
       )}
+      <PortraitCropDialog
+        file={cropQueue[0] ?? null}
+        remainingCount={Math.max(0, cropQueue.length - 1)}
+        onConfirm={confirmCrop}
+        onSkip={() => setCropQueue((current) => current.slice(1))}
+      />
     </div>
   );
 }

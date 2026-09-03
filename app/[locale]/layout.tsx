@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Inter, Poppins } from "next/font/google";
+import { Suspense } from "react";
+import { Geist_Mono, IBM_Plex_Sans_Arabic, Inter, Poppins } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -7,22 +8,37 @@ import "../globals.css";
 import { cn } from "@/lib/utils";
 import { routing } from "@/i18n/routing";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
+import { CatalogChromeProvider } from "@/components/public/catalog-chrome";
+import { SiteHeader } from "@/components/public/site-header";
+import { SiteFooter, SiteFooterFallback } from "@/components/public/site-footer";
+import { siteUrl } from "@/lib/site";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-sans" });
 
 const poppins = Poppins({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-heading",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
+});
+
+const ibmPlexArabic = IBM_Plex_Sans_Arabic({
+  subsets: ["arabic"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-arabic",
 });
 
 export const metadata: Metadata = {
-  title: "QuickTalk Real Estate | Dubai Properties",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "QuickTalk Real Estate | Dubai Properties",
+    template: "%s",
+  },
   description:
     "Explore properties for sale and rent, off-plan developments, and real estate investment opportunities in Dubai.",
   appleWebApp: {
@@ -46,12 +62,26 @@ export default async function RootLayout({ children }: LayoutProps<"/[locale]">)
     <html
       lang={locale}
       dir={locale === "ar" ? "rtl" : "ltr"}
-      className={cn("h-full", "antialiased", inter.variable, poppins.variable, geistMono.variable, "font-sans")}
+      className={cn(
+        "h-full antialiased font-sans",
+        inter.variable,
+        poppins.variable,
+        geistMono.variable,
+        locale === "ar" && ibmPlexArabic.variable,
+      )}
     >
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider>
-          <ClerkProvider>
-            <ConvexClientProvider>{children}</ConvexClientProvider>
+          <ClerkProvider afterSignOutUrl="/sign-in" appearance={clerkAppearance}>
+            <ConvexClientProvider>
+              <CatalogChromeProvider>
+                <SiteHeader />
+                <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+                <Suspense fallback={<SiteFooterFallback />}>
+                  <SiteFooter />
+                </Suspense>
+              </CatalogChromeProvider>
+            </ConvexClientProvider>
           </ClerkProvider>
         </NextIntlClientProvider>
       </body>

@@ -31,7 +31,7 @@ export default function AdminError({ error, reset }: { error: Error & { digest?:
           Try again
         </Button>
         <Button render={<Link href="/admin" />} nativeButton={false}>
-          Back to Dashboard
+          Back to Overview
         </Button>
       </div>
     </div>

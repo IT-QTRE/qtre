@@ -1,32 +1,45 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { LeadEditForm } from "@/components/admin/leads/lead-edit-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { useAuthedQuery } from "@/components/admin/use-authed-query";
 
 export default function LeadEditPage() {
   const params = useParams<{ id: string }>();
-  const lead = useQuery(api.leads.get, { id: params.id as Id<"leads"> });
+  const lead = useAuthedQuery(api.leads.get, { id: params.id as Id<"leads"> });
 
   if (lead === undefined) {
-    return <p className="text-muted-foreground">Loading…</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/leads" label="Leads" />} title="Lead" />
+        <div className="h-48 border border-border bg-muted/60" aria-hidden />
+      </div>
+    );
   }
 
   if (lead === null) {
-    return <p className="text-muted-foreground">Lead not found.</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/leads" label="Leads" />} title="Lead" />
+        <p className="max-w-prose text-sm text-muted-foreground">This inquiry is not in your inbox.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/leads" label="Back to Leads" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{lead.name}</h1>
-        <p className="text-muted-foreground">Review inquiry and update status or assignment.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/leads" label="Leads" />}
+          title={lead.name}
+          description="Review the inquiry and update status or assignment."
+        />
+        <LeadEditForm lead={lead} />
       </div>
-      <LeadEditForm lead={lead} />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

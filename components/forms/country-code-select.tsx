@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { CURATED_COUNTRIES } from "@/lib/constants/countries";
+import { cn } from "@/lib/utils";
 
 const OTHER_VALUE = "__other__";
 
@@ -13,9 +14,25 @@ const OTHER_VALUE = "__other__";
 // curated list, still needs a way in/out. "Other…" reveals the same
 // free-text + uppercase-transform input the field used to be, so nothing
 // that previously round-tripped stops working.
-export function CountryCodeSelect({ value, onChange, id }: { value: string; onChange: (next: string) => void; id?: string }) {
+export function CountryCodeSelect({
+  value,
+  onChange,
+  id,
+  invalid,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  id?: string;
+  invalid?: boolean;
+}) {
   const isCurated = CURATED_COUNTRIES.some((country) => country.code === value);
   const [showCustom, setShowCustom] = useState(() => value !== "" && !isCurated);
+  const selected = CURATED_COUNTRIES.find((country) => country.code === value);
+  const display = showCustom
+    ? "Other…"
+    : selected
+      ? `${selected.label} (${selected.code})`
+      : "Select a market…";
 
   function handleSelect(next: string | null) {
     if (!next) return;
@@ -31,8 +48,10 @@ export function CountryCodeSelect({ value, onChange, id }: { value: string; onCh
   return (
     <div className="space-y-2">
       <Select value={showCustom ? OTHER_VALUE : value} onValueChange={handleSelect}>
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue placeholder="Select a market…" />
+        <SelectTrigger id={id} className="w-full" aria-invalid={invalid || undefined}>
+          <span className={cn("flex flex-1 truncate text-left", !showCustom && !selected ? "text-muted-foreground" : undefined)}>
+            {display}
+          </span>
         </SelectTrigger>
         <SelectContent>
           {CURATED_COUNTRIES.map((country) => (
@@ -48,6 +67,7 @@ export function CountryCodeSelect({ value, onChange, id }: { value: string; onCh
           placeholder="AE"
           maxLength={2}
           value={value}
+          aria-invalid={invalid || undefined}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
         />
       )}

@@ -536,4 +536,68 @@ describe("mediaItems.listAllPaginated", () => {
     const secondIds = second.page.map((row) => row._id);
     expect(secondIds.every((id) => !firstIds.has(id))).toBe(true);
   });
+
+  test("entityLabel is the English title when entityId is a real document", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedAdmin(t);
+    const propertyId = await t.run(async (ctx) => {
+      const createdBy = (
+        await ctx.db
+          .query("users")
+          .withIndex("by_token_identifier", (q) => q.eq("tokenIdentifier", "clerk|admin-1"))
+          .unique()
+      )!._id;
+      return await ctx.db.insert("properties", {
+        price: 1_000_000,
+        bedrooms: 2,
+        bathrooms: 2,
+        areaSqft: 1000,
+        countryCode: "AE",
+        title: { en: "Marina View Apartment" },
+        description: { en: "A unit." },
+        city: { en: "Dubai" },
+        listingStatus: "for_sale",
+        createdBy,
+        publishing: { slug: "marina-view-apartment", status: "published", updatedAt: Date.now() },
+      });
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaItems", {
+        entityType: "property",
+        entityId: propertyId,
+        url: "https://example.public.blob.vercel-storage.com/labeled.webp",
+        pathname: `${requiredPathnamePrefix("property", propertyId)}labeled.webp`,
+        mimeType: "image/webp",
+        order: 0,
+      });
+    });
+
+    const result = await asAdmin.query(api.mediaItems.listAllPaginated, {
+      paginationOpts: { numItems: 10, cursor: null },
+      entityType: "property",
+    });
+    expect(result.page.some((item) => item.entityLabel === "Marina View Apartment")).toBe(true);
+  });
+
+  test("entityLabel is null when entityId is not a document id", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedAdmin(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaItems", {
+        entityType: "property",
+        entityId: "not-a-document-id",
+        url: "https://example.public.blob.vercel-storage.com/orphan.webp",
+        pathname: `${requiredPathnamePrefix("property", "not-a-document-id")}orphan.webp`,
+        mimeType: "image/webp",
+        order: 0,
+      });
+    });
+
+    const result = await asAdmin.query(api.mediaItems.listAllPaginated, {
+      paginationOpts: { numItems: 10, cursor: null },
+      entityType: "property",
+    });
+    expect(result.page.every((item) => item.entityLabel === null)).toBe(true);
+  });
 });

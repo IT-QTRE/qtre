@@ -22,13 +22,14 @@ These are gaps in `TECH_STACK.md` that weren't specified. Flagging them here so
 they get a decision at the right time instead of blocking now.
 
 - [x] ~~**Blog content editor**~~ — resolved at the Phase 4c review: Tiptap WYSIWYG, stored as an HTML string per locale (fits the existing `localizedTextValidator`/`LocalizedText` shape unchanged — no schema migration). See `docs/superpowers/plans/2026-08-11-phase-4c-leads-blog-media-users-settings-audit.md`.
-- [ ] **Map provider** for property/project location — Google Maps vs Mapbox vs none for v1? *(needed by Phase 5)*
-- [x] ~~**Lead-form spam protection**~~ — resolved for the general Contact page: it embeds GoHighLevel's own hosted form (script/iframe), so that spam protection is GHL's responsibility, not ours. Still needed for the property/project inquiry form (which *is* a Convex mutation, unlike Contact) — honeypot and/or rate limiting is the minimum bar; decide at Phase 5.
+- [x] ~~**Map provider**~~ — resolved 2026-08-20: Google Maps (Places Autocomplete + pin on admin; public embed + Directions on property/project detail when `coordinates` exist). Spec: `docs/superpowers/specs/2026-08-20-property-location-google-map.md`.
+- [x] ~~**Lead-form spam protection**~~ — resolved for the general Contact page: it embeds GoHighLevel's own hosted form (script/iframe), so that spam protection is GHL's responsibility, not ours. Property/project inquiry (Convex mutation): **honeypot** is the v1 bar (decided 2026-08-21); shipped with `publicLeads.createListingInquiry` / `createProjectInquiry`. Captcha / IP rate limits stay deferred.
 - [x] ~~**Public visitor accounts**~~ — resolved via `docs/superpowers/specs/2026-08-07-roles-and-portals-design.md`: Clerk extends beyond admin-only to Agent and Client portal accounts. No generic buyer favorites/saved-search accounts.
 - [ ] **Convex environments** — separate dev/preview/prod Convex deployments mirroring Vercel environments? Confirmed still deferred at the Phase 2 review — single dev deployment/instance is fine until closer to launch (Phase 8).
 - [x] ~~**Permission matrix**~~ — resolved: `convex/lib/roles.ts` defines `RESOURCES`/`PERMISSION_MATRIX`/`can()`, encoding the exact per-role capability grid (Super Admin, Admin, Agent, Client) per resource (Properties, Projects, Developers, Agents, Communities, Leads, Property Submissions, Blog, Media Items, Users, Website Settings, Audit Logs). Row-level scoping (e.g. an Agent's own assigned properties) is enforced separately, not by this matrix alone — see `convex/lib/permissions.ts`.
 - [x] ~~**Lead storage**~~ — resolved: split by source. The general Contact page uses an embedded GoHighLevel form — no Convex involvement, no internal admin/agent visibility (GHL's own CRM, not ours). Property/project-specific inquiries ("Contact this agent about this listing") go into our own `leads` table via a Convex mutation, since they need real `propertyId`/`projectId`/`agentId` foreign keys to power the admin Leads screen and the Agent Portal's assigned-leads view. See "GoHighLevel" and "Convex data areas" in `TECH_STACK.md`.
 - [x] ~~**Communities entity**~~ — resolved via `docs/superpowers/specs/2026-08-08-communities-and-media-model.md`: modeled as a real `communities` table (Admin-editable, country-aware via `countryCode`), with `properties`/`projects` carrying their own `countryCode`/`city` fields so a listing works correctly even before a curated community page exists for its area — this also makes the schema hold up if a second country (e.g. Thailand) is added later, without a breaking migration.
+- [x] ~~**Public listing URLs**~~ — resolved 2026-08-17: not a Phase 5 blocker and not a ranking leap for a brokerage catalog. Indexes may be `/properties/for-sale` and `/properties/for-rent` (off-plan stays `/projects`); a listing stays `/properties/{slug}` using the admin `publishing.slug` — stable when status changes to sold/rented (see Phase 6). Do **not** nest details under `for-sale`/`for-rent`, do **not** append a public numeric id, do **not** auto-build keyword-stuffed slugs (H&S/Bayut classifieds pattern). Facets (location, beds, price) stay query params on the index. Dedicated landings like `/properties-for-sale-in-dubai` remain Phase 6, and only with unique copy. Query-param indexes (`?status=sale`) are acceptable until the listing pages are being rebuilt anyway.
 
 ---
 
@@ -41,7 +42,7 @@ Implemented per `docs/superpowers/plans/2026-08-07-phase-0-foundation.md` (Tasks
 - [x] Initialize Convex project (`npx convex dev`) — dev deployment created and connected
 - [ ] Confirm dev/prod Convex deployment split — still open, see "Convex environments" in Open Decisions
 - [x] Initialize Clerk project, add keys to `.env.local`
-- [ ] Connect Clerk to Next.js middleware (`clerkMiddleware()` in `proxy.ts`, route protection) — deferred to Phase 2 by design; `proxy.ts` stays locale-detection-only until then
+- [x] Connect Clerk to Next.js middleware (`clerkMiddleware()` in `proxy.ts`, route protection) — done in Phase 2; `proxy.ts` now composes Clerk + next-intl (portals protected, `[locale]` public, `/api` skipped for locale)
 - [x] Create locale config (`i18n/routing.ts`: `routing.locales`, `AppLocale`, `routing.defaultLocale` = `en`, `ar`, `tr`)
 - [x] Create `app/[locale]/` route skeleton (layout, page) with `app/robots.ts`, `app/sitemap.ts`, `app/favicon.ico`, `app/icon0.svg`/`icon1.png`/`apple-icon.png`/`manifest.json` kept **outside** `[locale]`
 - [x] Add locale middleware/proxy (`proxy.ts`) with the static/metadata-file exclusion matcher (also excludes `admin`, so `/admin` isn't locale-redirected)
@@ -128,20 +129,25 @@ Build CRUD in dependency order — entities other tables reference should exist 
 
 Now backed by real admin-entered Convex data.
 
-- [ ] Home
-- [ ] Properties listing (+ filters) and Property detail
-- [ ] Projects listing and Project detail
-- [ ] Developers listing/profile
-- [ ] Agents listing/profile
-- [ ] Communities listing/detail pages (backed by the `communities` table, filtered by `countryCode` once a second country exists)
-- [ ] About
-- [ ] Blog listing and post detail
-- [ ] Contact page's general inquiry form → embedded GoHighLevel form (script/iframe snippet), not a Convex mutation — no `leads` table involved
-- [ ] Property/project detail page inquiry form ("Contact this agent about this listing") → RHF + Zod form → Convex mutation → `leads` table (with `propertyId`/`projectId` and, if the listing has one, a default `assignedAgentId` from `properties.agentId`/`projects`' equivalent)
-- [ ] "List Your Property" homepage CTA → routes into Client Portal sign-up/submission flow
-- [ ] Motion: hero animation, section entrances, nav transitions, property-card interactions, dialog/gallery transitions (subtle, fast, premium feel)
-- [ ] Map integration on property/project detail pages (per Open Decisions)
-- [ ] Server Components by default; Client Components only where interactivity (filters, galleries, forms) is required
+Status 2026-08-29: Home, Buy/Rent, property detail, off-plan index + detail, developer/team directories + slugs, blog listing + post detail, contact (GHL embed from settings), About, Services, and Communities are live. Motion pass shipped (gold-line language, not fade-every-section). List Your Property stays open.
+
+- [x] Home — catalog home (`/en`): search, published rails, communities/developers teasers, contact from Website Settings
+- [x] Properties listing (+ filters) — `/properties?status=sale` (Buy) and `?status=rent` (Rent); sticky filters, pagination, SEO metadata. Pretty `/properties/for-sale` and `/for-rent` remain optional hygiene (see Open Decisions)
+- [x] Property detail — `/properties/{slug}` split folio: gallery, facts, map, related names, published agent; sticky inquire on `lg+`
+- [x] Projects listing — `/projects` off-plan catalog: sticky filters (location, starting price, construction status), pagination, SEO metadata. Pretty extra URLs remain optional.
+- [x] Project detail — `/projects/{slug}`: mosaic gallery, identity (from-price, construction, location), unit types, payment plan, amenities, map when pinned, developer name link, sticky inquire (`publicLeads.createProjectInquiry`, honeypot)
+- [x] Developers listing/profile — `/developers` ceremonial roster (maroon field, logo marquee when marks exist, gold-wipe names); `/developers/{slug}` house plate (name, logo, about, gold-top contact, published projects + properties)
+- [x] Agents listing/profile — `/agents` ivory calling-card grid (portrait, published position, firm, email/phone); `/agents/{slug}` desk folio (portrait, about, sticky contact, published assigned listings). Public nav/copy is **Team**; admin stays Agents. URL stays `/agents`. No invented titles/socials.
+- [x] Services — `/services` hub leads with QTRE work (sale / rent / off-plan, residence through a purchase, advisory wrap from About). Nine QTB desks live under `/services/visa/{desk}` and `/services/license/{action}`; nav nests Visa / License on hover. Open: whether QTRE files those applications or refers to QuickTalk Business. Source: `SERVICES.md`, `ABOUT.md`.
+- [x] Communities listing/detail — `/communities` A–Z directory of published places; `/communities/{slug}` folio (hero, extra photos, about, linked sale/rent/off-plan). Live slug is unique across markets. Home rail still newest published with a photo.
+- [x] About — maroon DirectoryHero, founder plate, quote field; from The Group through Commitment: varied beats (stacked group, reversed desk, three-desk columns, pillar list, maroon commitment split). Copy from `ABOUT.md` (QTRE name; no invented address, photo, or unverified scale figures). Public AR/TR voice warmed 2026-08-29.
+- [x] Blog listing and post detail — `/blog` chronological index (date, title, cover when published); `/blog/{slug}` sanitized Tiptap body. Public and admin copy is Blog, not Notes.
+- [x] Contact page's general inquiry form → embedded GoHighLevel form (script/iframe snippet), not a Convex mutation — no `leads` table involved. Catalog-split page; iframe URL from Website Settings (allowlisted hosts). Email/phone from settings.
+- [x] Listing inquiry forms → Convex `publicLeads.createListingInquiry` / `createProjectInquiry` → `leads` (honeypot shipped; listing assigns `properties.agentId`; project inquiry has no agent assignment)
+- [ ] "List Your Property" homepage CTA → routes into Client Portal sign-up/submission flow — **blocked**: Client Portal is still a Phase 4 stub; `PRODUCT.md` forbids a fake funnel. Do not ship this CTA until the portal exists
+- [x] Motion: gold-line draw on home/directory/services heroes; catalog + search intent mark; listing-rail/grid stagger (readable settle); card hover (image, gold rule, shadow); gallery tile + lightbox; nav gold mark + dropdown timing. Identity-plate word reveal stays the signature. No fade-every-section.
+- [x] Map integration on property/project detail pages — Google embed when a pin exists; omitted when it does not
+- [x] Server Components by default; Client Components only where interactivity (filters, galleries, forms) is required — standing rule on public pages already built
 
 ## Phase 6 — SEO & Metadata
 
@@ -149,19 +155,19 @@ Now backed by real admin-entered Convex data.
 - [ ] Wire `app/sitemap.ts` to real `getPublishedProperties/Projects/BlogPosts` Convex queries; split via `generateSitemaps()` if the URL count grows large
 - [ ] `app/robots.ts` disallowing `/admin/`, Agent Portal and Client Portal routes, `/sign-in/`, `/sign-up/`, `/api/`, `/preview/`
 - [ ] JSON-LD structured data: `WebSite`, `Organization`, `RealEstateAgent`, `BreadcrumbList`, `Article` (blog), `VideoObject` (if video content exists)
-- [ ] Canonical URL strategy for filtered listing pages; dedicated SEO landing pages (e.g. `/properties-for-sale-in-dubai`, `/communities/dubai-marina`) with real content, not just a listing grid
+- [ ] Canonical URL strategy for filtered listing pages; dedicated SEO landing pages (e.g. `/properties-for-sale-in-dubai`, `/communities/dubai-marina`) with real content, not just a listing grid — indexes `/properties/for-sale` and `/for-rent` are the catalog roots, not a substitute for those landings; do not ship thin clones of the grid under extra pretty URLs
 - [ ] Sold/rented/unavailable listing handling: keep page, mark unavailable, suggest similar active properties, redirect only to a genuine replacement, `410 Gone` only when permanently removed
 
 ## Phase 7 — Internationalization Content Layer
 
 Structure already exists from Phase 0 — this phase is content and correctness.
 
-- [ ] Populate `messages/en.json`, `ar.json`, `tr.json` (nav, forms, validation, listing labels, filters, admin text as needed)
-- [ ] Localized metadata + `alternates.languages` (hreflang) per locale page, self-referencing canonical
+- [x] Populate `messages/en.json`, `ar.json`, `tr.json` for the public site (nav, catalog, About, Services hub, contact, listing inquire). Admin UI text and a dedicated RTL pass remain.
+- [ ] Localized metadata + `alternates.languages` (hreflang) per locale page, self-referencing canonical — canonicals exist on public pages; hreflang does not
 - [ ] RTL pass for Arabic: logical CSS properties, directional icons, breadcrumbs, sliders, tables, pagination, animation direction
 - [ ] Locale-aware `Intl` formatting for currency, numbers, dates, area
-- [ ] Multi-locale sitemap entries — only for published, existing translations
-- [ ] Language switcher: preserve current page if a translation exists, else fall back to locale homepage
+- [ ] Multi-locale sitemap entries — only for published, existing translations. `app/sitemap.ts` is still a stub (home + sale indexes only)
+- [x] Language switcher: preserves the current path (and catalog query) across `en` / `ar` / `tr`
 - [ ] Prevent indexing of incomplete translations (`noIndex` on missing-locale fallbacks)
 
 ## Phase 8 — Polish, QA, and Launch Readiness

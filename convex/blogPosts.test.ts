@@ -256,3 +256,166 @@ describe("blogPosts.remove", () => {
     await expect(asSuperAdmin.mutation(api.blogPosts.remove, { id })).resolves.toBeNull();
   });
 });
+
+describe("blogPosts.setPublishingStatus", () => {
+  test("keeps slug and publishedAt when moving a live note to draft", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.blogPosts.create, { ...baseArgs, status: "published" });
+    const original = await asAdmin.query(api.blogPosts.get, { id });
+
+    await asAdmin.mutation(api.blogPosts.setPublishingStatus, { id, status: "draft" });
+    const updated = await asAdmin.query(api.blogPosts.get, { id });
+    expect(updated?.publishing.status).toBe("draft");
+    expect(updated?.publishing.slug).toBe(original?.publishing.slug);
+    expect(updated?.publishing.publishedAt).toBe(original?.publishing.publishedAt);
+  });
+
+  test("rejects an admin updating a note another admin authored", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin1 = await seedUser(t, "clerk|admin-1", "admin");
+    const asAdmin2 = await seedUser(t, "clerk|admin-2", "admin");
+    const id = await asAdmin1.mutation(api.blogPosts.create, baseArgs);
+
+    await expect(
+      asAdmin2.mutation(api.blogPosts.setPublishingStatus, { id, status: "published" }),
+    ).rejects.toThrow(ForbiddenError);
+  });
+});
+
+const propertyArgs = {
+  price: 2_100_000,
+  bedrooms: 2,
+  bathrooms: 2,
+  areaSqft: 1200,
+  countryCode: "AE",
+  title: { en: "Marina Unit 101" },
+  description: { en: "A published unit" },
+  city: { en: "Dubai" },
+  listingStatus: "for_sale" as const,
+  slug: "marina-unit-101",
+  status: "published" as const,
+};
+
+describe("blogPosts.related", () => {
+  test("stores related on create and omits the field when the list is empty", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const propertyId = await asAdmin.mutation(api.properties.create, propertyArgs);
+    const id = await asAdmin.mutation(api.blogPosts.create, {
+      ...baseArgs,
+      related: [{ type: "property", id: propertyId }],
+    });
+    const stored = await asAdmin.query(api.blogPosts.get, { id });
+    expect(stored?.related).toEqual([{ type: "property", id: propertyId }]);
+
+    const emptyId = await asAdmin.mutation(api.blogPosts.create, { ...baseArgs, slug: "empty-related" });
+    const empty = await asAdmin.query(api.blogPosts.get, { id: emptyId });
+    expect(empty?.related).toBeUndefined();
+  });
+
+  test("rejects duplicates, more than four items, missing records, and a self-link", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const propertyId = await asAdmin.mutation(api.properties.create, propertyArgs);
+    const extraIds = [];
+    for (let i = 0; i < 4; i += 1) {
+      extraIds.push(
+        await asAdmin.mutation(api.properties.create, {
+          ...propertyArgs,
+          slug: `unit-${i}`,
+          title: { en: `Unit ${i}` },
+        }),
+      );
+    }
+    const postId = await asAdmin.mutation(api.blogPosts.create, baseArgs);
+
+    await expect(
+      asAdmin.mutation(api.blogPosts.create, {
+        ...baseArgs,
+        slug: "dupes",
+        related: [
+          { type: "property", id: propertyId },
+          { type: "property", id: propertyId },
+        ],
+      }),
+    ).rejects.toThrow("Also see cannot list the same record twice");
+
+    await expect(
+      asAdmin.mutation(api.blogPosts.create, {
+        ...baseArgs,
+        slug: "too-many",
+        related: [
+          { type: "property", id: propertyId },
+          ...extraIds.map((id) => ({ type: "property" as const, id })),
+        ],
+      }),
+    ).rejects.toThrow("Also see can list at most 4 items");
+
+    await asAdmin.mutation(api.properties.remove, { id: extraIds[0]! });
+    await expect(
+      asAdmin.mutation(api.blogPosts.create, {
+        ...baseArgs,
+        slug: "missing",
+        related: [{ type: "property", id: extraIds[0]! }],
+      }),
+    ).rejects.toThrow("Related property not found");
+
+    await expect(
+      asAdmin.mutation(api.blogPosts.update, {
+        id: postId,
+        ...baseArgs,
+        related: [{ type: "blogPost", id: postId }],
+      }),
+    ).rejects.toThrow("A post cannot list itself in Also see");
+  });
+
+  test("clears related on update when the list is empty", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const propertyId = await asAdmin.mutation(api.properties.create, propertyArgs);
+    const id = await asAdmin.mutation(api.blogPosts.create, {
+      ...baseArgs,
+      related: [{ type: "property", id: propertyId }],
+    });
+
+    await asAdmin.mutation(api.blogPosts.update, { id, ...baseArgs, related: [] });
+    const updated = await asAdmin.query(api.blogPosts.get, { id });
+    expect(updated?.related).toBeUndefined();
+  });
+});
+
+describe("blogPosts.topicName", () => {
+  test("omits categoryId when the topic is blank and sets it when named", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const blankId = await asAdmin.mutation(api.blogPosts.create, baseArgs);
+    const blank = await asAdmin.query(api.blogPosts.get, { id: blankId });
+    expect(blank?.categoryId).toBeUndefined();
+
+    const namedId = await asAdmin.mutation(api.blogPosts.create, {
+      ...baseArgs,
+      slug: "visa-note",
+      topicName: "Visa",
+    });
+    const named = await asAdmin.query(api.blogPosts.get, { id: namedId });
+    expect(named?.categoryId).toBeTypeOf("string");
+
+    const reusedId = await asAdmin.mutation(api.blogPosts.create, {
+      ...baseArgs,
+      slug: "visa-again",
+      topicName: "visa",
+    });
+    const reused = await asAdmin.query(api.blogPosts.get, { id: reusedId });
+    expect(reused?.categoryId).toBe(named?.categoryId);
+  });
+
+  test("clears categoryId on update when the topic is blank", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.blogPosts.create, { ...baseArgs, topicName: "Visa" });
+    await asAdmin.mutation(api.blogPosts.update, { id, ...baseArgs, topicName: "" });
+    const updated = await asAdmin.query(api.blogPosts.get, { id });
+    expect(updated?.categoryId).toBeUndefined();
+  });
+});

@@ -1,6 +1,7 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { mediaEntityTypeValidator, type MediaEntityType } from "./lib/mediaEntityType";
 import { localizedTextValidator } from "./lib/localizedText";
 import { assertCanWriteMedia, assertCanReadMedia } from "./lib/mediaAuthorization";
@@ -13,6 +14,62 @@ import { ForbiddenError, requireRole } from "./lib/permissions";
 const NON_PUBLIC_ENTITY_TYPES = (Object.keys(MEDIA_ACCESS_CONFIG) as MediaEntityType[]).filter(
   (type) => MEDIA_ACCESS_CONFIG[type].access !== "public",
 );
+
+async function publicEntityLabel(
+  ctx: QueryCtx,
+  entityType: MediaEntityType,
+  entityId: string,
+): Promise<string | null> {
+  switch (entityType) {
+    case "property": {
+      const id = ctx.db.normalizeId("properties", entityId);
+      if (!id) return null;
+      const doc = await ctx.db.get(id);
+      return doc?.title.en || null;
+    }
+    case "project": {
+      const id = ctx.db.normalizeId("projects", entityId);
+      if (!id) return null;
+      const doc = await ctx.db.get(id);
+      return doc?.title.en || null;
+    }
+    case "developer": {
+      const id = ctx.db.normalizeId("developers", entityId);
+      if (!id) return null;
+      const doc = await ctx.db.get(id);
+      return doc?.name.en || null;
+    }
+    case "agent": {
+      const id = ctx.db.normalizeId("agents", entityId);
+      if (!id) return null;
+      const doc = await ctx.db.get(id);
+      return doc?.name || null;
+    }
+    case "community": {
+      const id = ctx.db.normalizeId("communities", entityId);
+      if (!id) return null;
+      const doc = await ctx.db.get(id);
+      return doc?.name.en || null;
+    }
+    case "blogPost": {
+      const id = ctx.db.normalizeId("blogPosts", entityId);
+      if (!id) return null;
+      const doc = await ctx.db.get(id);
+      return doc?.title.en || null;
+    }
+    default:
+      return null;
+  }
+}
+
+async function withPublicEntityLabels(ctx: QueryCtx, page: Doc<"mediaItems">[]) {
+  return await Promise.all(
+    page.map(async (item) => ({
+      ...item,
+      entityLabel: await publicEntityLabel(ctx, item.entityType, item.entityId),
+    })),
+  );
+}
 
 // Called by app/api/blob/upload/route.ts's onBeforeGenerateToken before it
 // ever asks Vercel Blob for a token — an unauthorized caller's upload is
@@ -199,11 +256,12 @@ export const listAllPaginated = query({
       if (MEDIA_ACCESS_CONFIG[args.entityType].access !== "public") {
         throw new ForbiddenError("listAllPaginated only serves public entity types");
       }
-      return await ctx.db
+      const result = await ctx.db
         .query("mediaItems")
         .withIndex("by_entity", (q) => q.eq("entityType", args.entityType!))
         .order("desc")
         .paginate(args.paginationOpts);
+      return { ...result, page: await withPublicEntityLabels(ctx, result.page) };
     }
 
     // "All" still excludes every non-public entityType. Do NOT remove this
@@ -211,11 +269,12 @@ export const listAllPaginated = query({
     // and clients can call this query directly with mediaItems:read and
     // would otherwise receive private submission documents (title deeds,
     // floor plans) that belong to other clients.
-    return await ctx.db
+    const result = await ctx.db
       .query("mediaItems")
       .withIndex("by_entity")
       .order("desc")
       .filter((q) => q.and(...NON_PUBLIC_ENTITY_TYPES.map((t) => q.neq(q.field("entityType"), t))))
       .paginate(args.paginationOpts);
+    return { ...result, page: await withPublicEntityLabels(ctx, result.page) };
   },
 });

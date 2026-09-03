@@ -3,28 +3,34 @@
 import { useEffect, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import { Bold, Italic, Heading2, Heading3, List, ListOrdered, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EditorLinkDialog } from "@/components/forms/editor-link-dialog";
+import { linkRelAndTarget } from "@/lib/links/internal-href";
+import { siteUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 type RichTextEditorProps = {
   value: string; // HTML string
   onChange: (html: string) => void;
   dir?: "ltr" | "rtl";
+  excludePostId?: string;
 };
 
-export function RichTextEditor({ value, onChange, dir }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, dir, excludePostId }: RichTextEditorProps) {
   // Force a re-render on selection/transaction so toolbar active states stay in sync.
   const [, setToolbarTick] = useState(0);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [savedSelection, setSavedSelection] = useState<{ from: number; to: number } | null>(null);
 
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+      StarterKit.configure({
+        link: {
+          openOnClick: false,
+          HTMLAttributes: {},
+        },
       }),
     ],
     content: value,
@@ -60,16 +66,32 @@ export function RichTextEditor({ value, onChange, dir }: RichTextEditorProps) {
     );
   }
 
-  const setLink = () => {
-    const previous = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", previous ?? "https://");
-    if (url === null) return;
-    if (url === "") {
+  function applyLink(href: string, title?: string) {
+    if (!editor) return;
+    if (savedSelection) {
+      editor.commands.setTextSelection(savedSelection);
+    }
+    if (href === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  };
+    const attrs = { href, ...linkRelAndTarget(href, siteUrl) };
+    if (editor.state.selection.empty) {
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "text",
+          text: title || href,
+          marks: [{ type: "link", attrs }],
+        })
+        .run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink(attrs).run();
+  }
+
+  const currentHref = (editor.getAttributes("link").href as string | undefined) ?? "";
 
   return (
     <div dir={dir} className="overflow-hidden rounded-2xl border border-transparent bg-input/50">
@@ -116,7 +138,14 @@ export function RichTextEditor({ value, onChange, dir }: RichTextEditorProps) {
         >
           <ListOrdered />
         </ToolbarButton>
-        <ToolbarButton label="Link" active={editor.isActive("link")} onClick={setLink}>
+        <ToolbarButton
+          label="Link"
+          active={editor.isActive("link")}
+          onClick={() => {
+            setSavedSelection({ from: editor.state.selection.from, to: editor.state.selection.to });
+            setLinkOpen(true);
+          }}
+        >
           <Link2 />
         </ToolbarButton>
       </div>
@@ -127,6 +156,13 @@ export function RichTextEditor({ value, onChange, dir }: RichTextEditorProps) {
           "[&_.tiptap]:min-h-28 [&_.tiptap]:outline-none",
           "[&_.tiptap_p]:my-0 [&_.tiptap_p+p]:mt-2",
         )}
+      />
+      <EditorLinkDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        initialHref={currentHref}
+        excludePostId={excludePostId}
+        onApply={applyLink}
       />
     </div>
   );

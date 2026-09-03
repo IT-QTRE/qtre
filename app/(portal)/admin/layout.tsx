@@ -4,6 +4,7 @@ import { fetchQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminMobileHeader } from "@/components/admin/admin-mobile-header";
+import { AdminWorkspace } from "@/components/admin/admin-workspace";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { userId, getToken } = await auth();
@@ -26,6 +27,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex h-dvh w-full overflow-hidden">
+      <a
+        href="#admin-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:inset-s-3 focus:top-3 focus:z-50 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
+      >
+        Skip to main content
+      </a>
       <AdminSidebar userName={currentUser.name} userRole={currentUser.role} disabledResources={disabledResources} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <AdminMobileHeader
@@ -33,7 +40,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           userRole={currentUser.role}
           disabledResources={disabledResources}
         />
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">{children}</main>
+        <AdminWorkspace>{children}</AdminWorkspace>
       </div>
     </div>
   );

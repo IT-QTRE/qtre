@@ -37,6 +37,21 @@ export const list = query({
   },
 });
 
+const NEW_COUNT_CAP = 99;
+
+export const newCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    await requireRole(ctx, "leads", "read");
+    const newest = await ctx.db
+      .query("leads")
+      .withIndex("by_status", (q) => q.eq("status", "new"))
+      .take(NEW_COUNT_CAP);
+    return newest.length;
+  },
+});
+
 export const get = query({
   args: { id: v.id("leads") },
   handler: async (ctx, args) => {

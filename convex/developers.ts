@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 import { writeAuditLog } from "./lib/auditLog";
+import { nextCatalogRank } from "./lib/catalogRank";
 import { localizedTextValidator } from "./lib/localizedText";
 import { seoFieldsValidator } from "./lib/seoFields";
 
@@ -77,8 +78,10 @@ export const create = mutation({
 
     const { slug, status, ...rest } = args;
     const now = Date.now();
+    const rank = await nextCatalogRank(ctx, "developers");
     const id = await ctx.db.insert("developers", {
       ...rest,
+      ...(rank != null ? { rank } : {}),
       publishing: {
         slug,
         status,
@@ -111,9 +114,11 @@ export const update = mutation({
     }
     await assertSlugAvailable(ctx, args.slug, args.id);
 
-    const { id, slug, status, ...rest } = args;
+    const { id, slug, status, description, website, phone, email, seo, ...rest } = args;
     const now = Date.now();
-    await ctx.db.patch(id, {
+    const current = withoutSystemFields(existing);
+    const next = {
+      ...current,
       ...rest,
       publishing: {
         slug,
@@ -121,10 +126,82 @@ export const update = mutation({
         updatedAt: now,
         publishedAt: status === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
       },
-    });
+    };
+    if (description) next.description = description;
+    else delete next.description;
+    if (website) next.website = website;
+    else delete next.website;
+    if (phone) next.phone = phone;
+    else delete next.phone;
+    if (email) next.email = email;
+    else delete next.email;
+    if (seo) next.seo = seo;
+    else delete next.seo;
+    await ctx.db.replace(id, next);
     await writeAuditLog(ctx, { actorUserId: actor._id, resource: "developers", action: "update", targetId: id });
   },
 });
+
+export const setPublishingStatus = mutation({
+  args: {
+    id: v.id("developers"),
+    status: v.union(v.literal("draft"), v.literal("published")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const actor = await requireRole(ctx, "developers", "update");
+    const existing = await ctx.db.get(args.id);
+    if (!existing) {
+      throw new Error("Developer not found");
+    }
+
+    if (existing.publishing.status === args.status) {
+      return null;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      publishing: {
+        ...existing.publishing,
+        status: args.status,
+        updatedAt: now,
+        publishedAt: args.status === "published" ? (existing.publishing.publishedAt ?? now) : existing.publishing.publishedAt,
+      },
+    });
+    await writeAuditLog(ctx, { actorUserId: actor._id, resource: "developers", action: "update", targetId: args.id });
+    return null;
+  },
+});
+
+export const reorder = mutation({
+  args: { orderedIds: v.array(v.id("developers")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireRole(ctx, "developers", "update");
+    const existing = await ctx.db.query("developers").collect();
+    const existingIds = new Set(existing.map((developer) => developer._id));
+    const uniqueIds = new Set(args.orderedIds);
+    if (
+      uniqueIds.size !== existing.length ||
+      args.orderedIds.length !== existing.length ||
+      !args.orderedIds.every((id) => existingIds.has(id))
+    ) {
+      throw new Error("orderedIds must be exactly the set of developers");
+    }
+    for (const [index, id] of args.orderedIds.entries()) {
+      await ctx.db.patch(id, { rank: index });
+    }
+    return null;
+  },
+});
+
+function withoutSystemFields<T extends { _id: Id<"developers">; _creationTime: number }>(doc: T): Omit<T, "_id" | "_creationTime"> {
+  const { _id, _creationTime, ...fields } = doc;
+  if (!_id || !_creationTime) {
+    throw new Error("Developer document is missing system fields");
+  }
+  return fields;
+}
 
 export const remove = mutation({
   args: { id: v.id("developers") },

@@ -1,17 +1,32 @@
 "use client";
 
+import { useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { formatDate } from "@/lib/format/date";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AdminSection } from "@/components/admin/admin-section";
+import { AdminStickyActions } from "@/components/admin/admin-sticky-actions";
+import { useUnsavedChanges } from "@/components/admin/unsaved-changes";
+import { useAuthedQuery } from "@/components/admin/use-authed-query";
+
+const LIST_HREF = "/admin/leads";
+const NONE_VALUE = "__none__";
+
+const STATUS_LABEL = {
+  new: "New",
+  contacted: "Contacted",
+  qualified: "Qualified",
+  closed: "Closed",
+} as const;
 
 type LeadEditFormProps = { lead: Doc<"leads"> };
 
@@ -22,12 +37,9 @@ const leadEditSchema = z.object({
 type LeadEditValues = z.infer<typeof leadEditSchema>;
 
 function toFormValues(lead: Doc<"leads">): LeadEditValues {
-  return { status: lead.status, assignedAgentId: lead.assignedAgentId };
+  return { status: lead.status, assignedAgentId: lead.assignedAgentId ?? "" };
 }
 
-// A `Select` needs a non-empty string to show its placeholder correctly for
-// an unset optional relation — `""` (rather than `undefined`) is what we
-// feed its `value` prop, then translated back to `undefined` on submit.
 function OptionalRelationSelect({
   value,
   onChange,
@@ -35,16 +47,17 @@ function OptionalRelationSelect({
   options,
 }: {
   value: string | undefined;
-  onChange: (value: string | null) => void;
+  onChange: (value: string) => void;
   placeholder: string;
   options: { id: string; label: string }[];
 }) {
   return (
-    <Select value={value ?? ""} onValueChange={onChange}>
+    <Select value={value || NONE_VALUE} onValueChange={(next) => onChange(!next || next === NONE_VALUE ? "" : next)}>
       <SelectTrigger className="w-full">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
+        <SelectItem value={NONE_VALUE}>{placeholder}</SelectItem>
         {options.map((option) => (
           <SelectItem key={option.id} value={option.id}>
             {option.label}
@@ -56,40 +69,50 @@ function OptionalRelationSelect({
 }
 
 function RegardingValue({ lead }: { lead: Doc<"leads"> }) {
-  // `getName` (rather than `get`) — a lead can point at any Admin's
-  // property/project, and Properties/Projects are otherwise Admin-scoped.
-  const property = useQuery(api.properties.getName, lead.propertyId ? { id: lead.propertyId } : "skip");
-  const project = useQuery(api.projects.getName, lead.projectId ? { id: lead.projectId } : "skip");
+  const property = useAuthedQuery(api.properties.getName, lead.propertyId ? { id: lead.propertyId } : "skip");
+  const project = useAuthedQuery(api.projects.getName, lead.projectId ? { id: lead.projectId } : "skip");
 
   if (lead.propertyId) {
     if (property === undefined) return <span className="text-muted-foreground">Loading…</span>;
     if (property === null) return <span className="text-muted-foreground">Deleted property</span>;
-    return <span>{property.title}</span>;
+    return (
+      <Link href={`/admin/properties/${property._id}`} className="underline-offset-4 hover:underline">
+        {property.title}
+      </Link>
+    );
   }
 
   if (lead.projectId) {
     if (project === undefined) return <span className="text-muted-foreground">Loading…</span>;
     if (project === null) return <span className="text-muted-foreground">Deleted project</span>;
-    return <span>{project.title}</span>;
+    return (
+      <Link href={`/admin/projects/${project._id}`} className="underline-offset-4 hover:underline">
+        {project.title}
+      </Link>
+    );
   }
 
   return <span className="text-muted-foreground">General inquiry</span>;
 }
 
 export function LeadEditForm({ lead }: LeadEditFormProps) {
-  const agents = useQuery(api.agents.list) ?? [];
+  const router = useRouter();
+  const unsaved = useUnsavedChanges();
+  const agents = useAuthedQuery(api.agents.list, {}) ?? [];
   const agentOptions = agents.map((agent) => ({ id: agent._id, label: agent.name }));
-  // The assigned agent may have been deleted since this lead was last
-  // assigned — surface that explicitly instead of letting the Select
-  // silently show as empty/unset while the orphaned id is still stored.
   if (lead.assignedAgentId && !agentOptions.some((option) => option.id === lead.assignedAgentId)) {
     agentOptions.unshift({ id: lead.assignedAgentId, label: "Deleted agent" });
   }
   const updateLead = useMutation(api.leads.update);
   const form = useForm<LeadEditValues>({
     resolver: zodResolver(leadEditSchema),
+    defaultValues: toFormValues(lead),
     values: toFormValues(lead),
   });
+
+  useEffect(() => {
+    unsaved?.setDirty(form.formState.isDirty);
+  }, [form.formState.isDirty, unsaved]);
 
   async function onSubmit(values: LeadEditValues) {
     try {
@@ -98,6 +121,7 @@ export function LeadEditForm({ lead }: LeadEditFormProps) {
         status: values.status,
         assignedAgentId: values.assignedAgentId ? (values.assignedAgentId as Id<"agents">) : undefined,
       });
+      unsaved?.setDirty(false);
       toast.success("Lead updated");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update lead");
@@ -105,69 +129,85 @@ export function LeadEditForm({ lead }: LeadEditFormProps) {
   }
 
   return (
-    <div className="space-y-8">
-      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          <dt className="text-sm font-medium text-muted-foreground">Name</dt>
-          <dd className="text-sm">{lead.name}</dd>
-        </div>
-        <div className="space-y-1">
-          <dt className="text-sm font-medium text-muted-foreground">Email</dt>
-          <dd className="text-sm">{lead.email}</dd>
-        </div>
-        {lead.phone ? (
-          <div className="space-y-1">
-            <dt className="text-sm font-medium text-muted-foreground">Phone</dt>
-            <dd className="text-sm">{lead.phone}</dd>
-          </div>
-        ) : null}
-        {lead.message ? (
-          <div className="space-y-1 sm:col-span-2">
-            <dt className="text-sm font-medium text-muted-foreground">Message</dt>
-            <dd>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.message}</p>
-            </dd>
-          </div>
-        ) : null}
-        <div className="space-y-1">
-          <dt className="text-sm font-medium text-muted-foreground">Regarding</dt>
-          <dd className="text-sm">
-            <RegardingValue lead={lead} />
-          </dd>
-        </div>
-        <div className="space-y-1">
-          <dt className="text-sm font-medium text-muted-foreground">Submitted</dt>
-          <dd className="text-sm text-muted-foreground">{formatDate(lead._creationTime)}</dd>
-        </div>
-      </dl>
+    <FormProvider {...form}>
+      <form
+        autoComplete="off"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void form.handleSubmit(onSubmit)();
+        }}
+        className="flex flex-col gap-4"
+      >
+        <AdminSection title="Inquiry" hint="What they sent. These fields cannot be edited.">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <dt className="text-xs font-medium text-muted-foreground">Name</dt>
+              <dd className="text-sm">{lead.name}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs font-medium text-muted-foreground">Email</dt>
+              <dd className="text-sm">
+                <a href={`mailto:${lead.email}`} className="underline-offset-4 hover:underline">
+                  {lead.email}
+                </a>
+              </dd>
+            </div>
+            {lead.phone ? (
+              <div className="space-y-1">
+                <dt className="text-xs font-medium text-muted-foreground">Phone</dt>
+                <dd className="text-sm">
+                  <a href={`tel:${lead.phone}`} className="underline-offset-4 hover:underline">
+                    {lead.phone}
+                  </a>
+                </dd>
+              </div>
+            ) : null}
+            <div className="space-y-1">
+              <dt className="text-xs font-medium text-muted-foreground">Regarding</dt>
+              <dd className="text-sm">
+                <RegardingValue lead={lead} />
+              </dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs font-medium text-muted-foreground">Submitted</dt>
+              <dd className="text-sm text-muted-foreground">{formatDate(lead._creationTime)}</dd>
+            </div>
+            {lead.message ? (
+              <div className="space-y-1 sm:col-span-2">
+                <dt className="text-xs font-medium text-muted-foreground">Message</dt>
+                <dd>
+                  <p className="text-sm whitespace-pre-wrap">{lead.message}</p>
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </AdminSection>
 
-      <Separator />
-
-      <FormProvider {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <AdminSection title="Follow-up" hint="Status and who owns the conversation.">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label htmlFor="lead-status">Status</Label>
               <Controller
                 control={form.control}
                 name="status"
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="lead-status" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="new">New</SelectItem>
-                      <SelectItem value="contacted">Contacted</SelectItem>
-                      <SelectItem value="qualified">Qualified</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
+                      {(Object.keys(STATUS_LABEL) as Array<keyof typeof STATUS_LABEL>).map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {STATUS_LABEL[status]}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
               />
             </div>
             <div className="space-y-1">
-              <Label>Assigned Agent</Label>
+              <Label>Assigned agent</Label>
               <Controller
                 control={form.control}
                 name="assignedAgentId"
@@ -182,14 +222,18 @@ export function LeadEditForm({ lead }: LeadEditFormProps) {
               />
             </div>
           </div>
+        </AdminSection>
 
-          <div className="flex justify-end">
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Saving…" : "Save Changes"}
-            </Button>
-          </div>
-        </form>
-      </FormProvider>
-    </div>
+        <AdminStickyActions
+          disabled={form.formState.isSubmitting}
+          publishLabel={form.formState.isSubmitting ? "Saving…" : "Save"}
+          onCancel={() => {
+            if (unsaved) unsaved.requestLeave(LIST_HREF);
+            else router.push(LIST_HREF);
+          }}
+          onPublish={() => void form.handleSubmit(onSubmit)()}
+        />
+      </form>
+    </FormProvider>
   );
 }

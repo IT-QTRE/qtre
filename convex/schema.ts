@@ -2,9 +2,12 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { localizedTextValidator } from "./lib/localizedText";
 import { seoFieldsValidator, publishingFieldsValidator } from "./lib/seoFields";
+import { relatedValidator } from "./lib/blogRelated";
 import { mediaEntityTypeValidator } from "./lib/mediaEntityType";
 import { roleValidator, resourceValidator } from "./lib/roles";
 import { propertySharedFactsValidator } from "./lib/propertyFacts";
+import { furnishingValidator, propertyTypeValidator, rentalPeriodValidator } from "./lib/propertyAttributes";
+import { completionDateValidator } from "./lib/completionDate";
 
 export default defineSchema({
   users: defineTable({
@@ -42,15 +45,16 @@ export default defineSchema({
     email: v.optional(v.string()),
     seo: v.optional(seoFieldsValidator),
     publishing: publishingFieldsValidator,
+    rank: v.optional(v.number()),
   })
     .index("by_publishing_slug", ["publishing.slug"])
     .index("by_publishing_status", ["publishing.status"]),
 
-  // `name` is a plain string, not LocalizedText — a person's proper name
-  // isn't translated (mirrors how Developer names could be, but people's
-  // names generally aren't).
+  // `name` and `position` are plain strings, not LocalizedText — a person's
+  // proper name and job title stay in one language (admin is English).
   agents: defineTable({
     name: v.string(),
+    position: v.optional(v.string()),
     bio: v.optional(localizedTextValidator),
     email: v.string(),
     phone: v.optional(v.string()),
@@ -59,6 +63,7 @@ export default defineSchema({
     publishing: publishingFieldsValidator,
   })
     .index("by_publishing_slug", ["publishing.slug"])
+    .index("by_publishing_status", ["publishing.status"])
     .index("by_user", ["userId"]),
 
   communities: defineTable({
@@ -68,7 +73,10 @@ export default defineSchema({
     description: v.optional(localizedTextValidator),
     seo: v.optional(seoFieldsValidator),
     publishing: publishingFieldsValidator,
-  }).index("by_country_and_slug", ["countryCode", "publishing.slug"]),
+    rank: v.optional(v.number()),
+  })
+    .index("by_country_and_slug", ["countryCode", "publishing.slug"])
+    .index("by_publishing_status", ["publishing.status"]),
 
   mediaItems: defineTable({
     entityType: mediaEntityTypeValidator,
@@ -90,8 +98,28 @@ export default defineSchema({
     countryCode: v.string(),
     city: localizedTextValidator,
     status: v.union(v.literal("upcoming"), v.literal("under_construction"), v.literal("completed")),
+    // Portal-style handover window (Q4 2027), not a calendar day.
+    completionDate: v.optional(completionDateValidator),
     startingPrice: v.optional(v.number()),
+    // Studio = 0, 4 = 4+. Size/price ranges live on `unitTypes`; this list
+    // is the selected mix for catalog cards (kept in sync on write).
+    bedroomTypes: v.optional(v.array(v.number())),
+    unitTypes: v.optional(
+      v.array(
+        v.object({
+          bedrooms: v.union(v.literal(0), v.literal(1), v.literal(2), v.literal(3), v.literal(4)),
+          minAreaSqm: v.optional(v.number()),
+          maxAreaSqm: v.optional(v.number()),
+          minAreaSqft: v.optional(v.number()),
+          maxAreaSqft: v.optional(v.number()),
+          minPrice: v.optional(v.number()),
+          maxPrice: v.optional(v.number()),
+        }),
+      ),
+    ),
     coordinates: v.optional(v.object({ lat: v.number(), lng: v.number() })),
+    address: v.optional(v.string()),
+    placeId: v.optional(v.string()),
     amenities: v.optional(v.array(v.string())),
     // A handful of milestones (down payment, construction stages, handover,
     // etc.), not an open-ended log — small and bounded like `amenities`, so
@@ -119,6 +147,8 @@ export default defineSchema({
     description: localizedTextValidator,
     city: localizedTextValidator,
     coordinates: v.optional(v.object({ lat: v.number(), lng: v.number() })),
+    address: v.optional(v.string()),
+    placeId: v.optional(v.string()),
     listingStatus: v.union(
       v.literal("for_sale"),
       v.literal("for_rent"),
@@ -126,6 +156,9 @@ export default defineSchema({
       v.literal("rented"),
       v.literal("off_market"),
     ),
+    propertyType: v.optional(propertyTypeValidator),
+    furnishing: v.optional(furnishingValidator),
+    rentalPeriod: v.optional(rentalPeriodValidator),
     amenities: v.optional(v.array(v.string())),
     communityId: v.optional(v.id("communities")),
     developerId: v.optional(v.id("developers")),
@@ -145,6 +178,7 @@ export default defineSchema({
     .index("by_community", ["communityId"])
     .index("by_publishing_slug", ["publishing.slug"])
     .index("by_listing_status", ["listingStatus"])
+    .index("by_publishing_status_and_listingStatus", ["publishing.status", "listingStatus"])
     .index("by_created_by", ["createdBy"]),
 
   leads: defineTable({
@@ -159,7 +193,13 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_status", ["status"])
-    .index("by_assigned_agent", ["assignedAgentId"]),
+    .index("by_assigned_agent", ["assignedAgentId"])
+    .index("by_created_at", ["createdAt"]),
+
+  blogCategories: defineTable({
+    name: localizedTextValidator,
+    slug: v.string(),
+  }).index("by_slug", ["slug"]),
 
   blogPosts: defineTable({
     title: localizedTextValidator,
@@ -168,16 +208,21 @@ export default defineSchema({
     // `projects.createdBy` above — an Admin (never Super Admin) may only
     // update/delete/see posts where this matches their own `users._id`.
     authorUserId: v.id("users"),
+    categoryId: v.optional(v.id("blogCategories")),
     seo: v.optional(seoFieldsValidator),
+    related: v.optional(relatedValidator),
     publishing: publishingFieldsValidator,
   })
     .index("by_publishing_slug", ["publishing.slug"])
-    .index("by_author", ["authorUserId"]),
+    .index("by_publishing_status", ["publishing.status"])
+    .index("by_author", ["authorUserId"])
+    .index("by_category", ["categoryId"]),
 
   websiteSettings: defineTable({
     siteName: v.string(),
     contactEmail: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
+    contactWhatsapp: v.optional(v.string()),
     socialLinks: v.optional(
       v.object({
         facebook: v.optional(v.string()),
@@ -187,6 +232,7 @@ export default defineSchema({
       }),
     ),
     defaultSeo: v.optional(seoFieldsValidator),
+    contactFormUrl: v.optional(v.string()),
     updatedAt: v.number(),
   }),
 

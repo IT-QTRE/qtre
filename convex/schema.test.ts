@@ -331,6 +331,12 @@ describe("leads table", () => {
         .collect();
     });
     expect(assignedToAgent).toHaveLength(1);
+
+    const recentLeads = await t.run(async (ctx) => {
+      return await ctx.db.query("leads").withIndex("by_created_at").order("desc").take(1);
+    });
+    expect(recentLeads).toHaveLength(1);
+    expect(recentLeads[0].name).toBe("Jane Buyer");
   });
 });
 

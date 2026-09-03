@@ -1,74 +1,98 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { ROLES, type Role } from "@/convex/lib/roles";
-import { DataTable } from "@/components/admin/data-table";
-import { getUserColumns } from "@/components/admin/users/user-columns";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { AdminFilterGroup } from "@/components/admin/admin-filter-group";
+import { UserList } from "@/components/admin/users/user-list";
 import { InviteAgentDialog } from "@/components/admin/users/invite-agent-dialog";
 import { formatRoleLabel } from "@/components/admin/users/user-role-select";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useAuthedQuery } from "@/components/admin/use-authed-query";
+
+const ROLE_FILTERS = [
+  { id: "all", label: "All" },
+  ...ROLES.map((role) => ({ id: role, label: formatRoleLabel(role) })),
+] as const;
+
+type RoleFilter = (typeof ROLE_FILTERS)[number]["id"];
+
+function parseRole(value: string | null): RoleFilter {
+  if (value && (ROLES as readonly string[]).includes(value)) return value as Role;
+  return "all";
+}
+
+function hrefWithRole(pathname: string, queryString: string, role: RoleFilter) {
+  const params = new URLSearchParams(queryString);
+  if (role === "all") params.delete("role");
+  else params.set("role", role);
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
+function UserListSkeleton() {
+  return (
+    <div className="divide-y divide-border border-y border-border" aria-hidden>
+      {Array.from({ length: 6 }, (_, index) => (
+        <div key={index} className="flex items-center gap-3 py-3.5">
+          <div className="h-3 w-40 bg-muted" />
+          <div className="ms-auto h-3 w-24 bg-muted" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function UsersPage() {
-  const currentActor = useQuery(api.users.current);
-  const users = useQuery(api.users.list);
-  const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const roleFilter = parseRole(searchParams.get("role"));
+  const currentActor = useAuthedQuery(api.users.current, {});
+  const users = useAuthedQuery(api.users.list, {});
+
+  function setRole(value: RoleFilter) {
+    router.replace(hrefWithRole(pathname, searchParams.toString(), value), { scroll: false });
+  }
+
+  const scoped = useMemo(() => {
+    if (!users) return [];
+    return users.filter((user) => {
+      if (roleFilter !== "all" && user.role !== roleFilter) return false;
+      return true;
+    });
+  }, [users, roleFilter]);
+
+  const filters = (
+    <AdminFilterGroup
+      label="Role"
+      layout="wrap"
+      options={ROLE_FILTERS}
+      value={roleFilter}
+      onChange={setRole}
+    />
+  );
 
   const isLoading = currentActor === undefined || users === undefined;
 
-  const filteredUsers =
-    !users || roleFilter === "all" ? (users ?? []) : users.filter((user) => user.role === roleFilter);
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Users & Roles</h1>
-        <p className="text-muted-foreground">
-          Manage staff and client accounts and their permissions.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <AdminPageHeader
+        title="Users & Roles"
+        description="Staff and client accounts. Role changes take effect immediately."
+        actions={<InviteAgentDialog />}
+      />
 
       {isLoading || currentActor == null ? (
-        <p className="text-muted-foreground">Loading…</p>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">{filters}</div>
+          <UserListSkeleton />
+        </div>
+      ) : users.length === 0 ? (
+        <p className="max-w-prose text-sm leading-relaxed text-muted-foreground">No accounts yet.</p>
       ) : (
-        <>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Select
-              value={roleFilter}
-              onValueChange={(value) => {
-                if (value == null) return;
-                setRoleFilter(value as Role | "all");
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                {ROLES.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {formatRoleLabel(role)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <InviteAgentDialog />
-          </div>
-
-          <DataTable
-            columns={getUserColumns(currentActor)}
-            data={filteredUsers}
-            searchPlaceholder="Search users..."
-            filterColumnId="name"
-          />
-        </>
+        <UserList users={scoped} currentActor={currentActor} toolbar={filters} />
       )}
     </div>
   );

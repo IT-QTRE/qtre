@@ -40,6 +40,59 @@ describe("communities.list", () => {
     const communities = await asAdmin.query(api.communities.list, {});
     expect(communities).toHaveLength(1);
   });
+
+  test("counts linked properties and projects per community", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const communityId = await asAdmin.mutation(api.communities.create, baseArgs);
+    const emptyId = await asAdmin.mutation(api.communities.create, {
+      ...baseArgs,
+      slug: "empty-place",
+      name: { en: "Empty Place" },
+    });
+
+    await t.run(async (ctx) => {
+      const admin = await ctx.db
+        .query("users")
+        .withIndex("by_token_identifier", (q) => q.eq("tokenIdentifier", "clerk|admin-1"))
+        .unique();
+      const developerId = await ctx.db.insert("developers", {
+        name: { en: "Emaar" },
+        publishing: { slug: "emaar", status: "draft", updatedAt: Date.now() },
+      });
+      await ctx.db.insert("projects", {
+        title: { en: "Marina Heights" },
+        description: { en: "A tall tower" },
+        developerId,
+        communityId,
+        countryCode: "AE",
+        city: { en: "Dubai" },
+        status: "upcoming",
+        createdBy: admin!._id,
+        publishing: { slug: "marina-heights", status: "draft", updatedAt: Date.now() },
+      });
+      await ctx.db.insert("properties", {
+        price: 500000,
+        bedrooms: 2,
+        bathrooms: 2,
+        areaSqft: 1200,
+        countryCode: "AE",
+        title: { en: "Unit 101" },
+        description: { en: "A unit" },
+        city: { en: "Dubai" },
+        listingStatus: "for_sale",
+        communityId,
+        createdBy: admin!._id,
+        publishing: { slug: "unit-101", status: "draft", updatedAt: Date.now() },
+      });
+    });
+
+    const counts = await asAdmin.query(api.communities.listLinkCounts, {});
+    const downtown = counts.find((row) => row.communityId === communityId);
+    const empty = counts.find((row) => row.communityId === emptyId);
+    expect(downtown).toEqual({ communityId, properties: 1, projects: 1 });
+    expect(empty).toEqual({ communityId: emptyId, properties: 0, projects: 0 });
+  });
 });
 
 describe("communities.create", () => {
@@ -75,7 +128,7 @@ describe("communities.create", () => {
     ).rejects.toThrow();
   });
 
-  test("allows the same slug in a different country", async () => {
+  test("allows a draft to share a slug in a different country", async () => {
     const t = convexTest(schema, modules);
     const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
     await asAdmin.mutation(api.communities.create, baseArgs);
@@ -88,6 +141,36 @@ describe("communities.create", () => {
     const doc = await asAdmin.query(api.communities.get, { id: secondId });
     expect(doc?.publishing.slug).toBe("downtown");
     expect(doc?.countryCode).toBe("TR");
+  });
+
+  test("rejects publishing a slug that is already live in another country", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await asAdmin.mutation(api.communities.create, { ...baseArgs, status: "published" });
+    await expect(
+      asAdmin.mutation(api.communities.create, {
+        ...baseArgs,
+        countryCode: "TR",
+        name: { en: "Downtown Istanbul" },
+        city: { en: "Istanbul" },
+        status: "published",
+      }),
+    ).rejects.toThrow('Slug "downtown" is already live in AE');
+  });
+
+  test("allows a draft in another country to share a live slug until it is published", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await asAdmin.mutation(api.communities.create, { ...baseArgs, status: "published" });
+    const draftId = await asAdmin.mutation(api.communities.create, {
+      ...baseArgs,
+      countryCode: "TR",
+      name: { en: "Downtown Istanbul" },
+      city: { en: "Istanbul" },
+    });
+    await expect(
+      asAdmin.mutation(api.communities.setPublishingStatus, { id: draftId, status: "published" }),
+    ).rejects.toThrow('Slug "downtown" is already live in AE');
   });
 });
 
@@ -209,5 +292,104 @@ describe("communities.remove", () => {
     });
 
     await expect(asAdmin.mutation(api.communities.remove, { id })).rejects.toThrow();
+  });
+});
+
+describe("communities.setPublishingStatus", () => {
+  test("publishes a draft, keeps the slug, and sets publishedAt", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.communities.create, baseArgs);
+
+    await asAdmin.mutation(api.communities.setPublishingStatus, { id, status: "published" });
+    const doc = await asAdmin.query(api.communities.get, { id });
+    expect(doc?.publishing.status).toBe("published");
+    expect(doc?.publishing.slug).toBe("downtown");
+    expect(doc?.publishing.publishedAt).toEqual(expect.any(Number));
+  });
+
+  test("moves a published community to draft without clearing publishedAt or slug", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.communities.create, { ...baseArgs, status: "published" });
+    const published = await asAdmin.query(api.communities.get, { id });
+
+    await asAdmin.mutation(api.communities.setPublishingStatus, { id, status: "draft" });
+    const doc = await asAdmin.query(api.communities.get, { id });
+    expect(doc?.publishing.status).toBe("draft");
+    expect(doc?.publishing.slug).toBe("downtown");
+    expect(doc?.publishing.publishedAt).toBe(published?.publishing.publishedAt);
+  });
+
+  test("rejects an agent toggling publishing status", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.communities.create, baseArgs);
+    const asAgent = await seedUser(t, "clerk|agent-1", "agent");
+
+    await expect(asAgent.mutation(api.communities.setPublishingStatus, { id, status: "published" })).rejects.toThrow(
+      ForbiddenError,
+    );
+  });
+});
+
+describe("communities.reorder", () => {
+  test("writes rank 0…n for the exact set of ids", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const first = await asAdmin.mutation(api.communities.create, baseArgs);
+    const second = await asAdmin.mutation(api.communities.create, {
+      ...baseArgs,
+      slug: "marina",
+      name: { en: "Marina" },
+    });
+    const third = await asAdmin.mutation(api.communities.create, {
+      ...baseArgs,
+      slug: "palm",
+      name: { en: "Palm" },
+    });
+
+    await asAdmin.mutation(api.communities.reorder, { orderedIds: [third, first, second] });
+
+    const listed = await asAdmin.query(api.communities.list, {});
+    const byId = new Map(listed.map((row) => [row._id, row]));
+    expect(byId.get(third)?.rank).toBe(0);
+    expect(byId.get(first)?.rank).toBe(1);
+    expect(byId.get(second)?.rank).toBe(2);
+  });
+
+  test("rejects a partial id list", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const first = await asAdmin.mutation(api.communities.create, baseArgs);
+    await asAdmin.mutation(api.communities.create, {
+      ...baseArgs,
+      slug: "marina",
+      name: { en: "Marina" },
+    });
+
+    await expect(asAdmin.mutation(api.communities.reorder, { orderedIds: [first] })).rejects.toThrow(
+      "orderedIds must be exactly the set of communities",
+    );
+  });
+
+  test("appends a new community after the last rank once ranking has started", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const first = await asAdmin.mutation(api.communities.create, baseArgs);
+    const second = await asAdmin.mutation(api.communities.create, {
+      ...baseArgs,
+      slug: "marina",
+      name: { en: "Marina" },
+    });
+    await asAdmin.mutation(api.communities.reorder, { orderedIds: [second, first] });
+
+    const third = await asAdmin.mutation(api.communities.create, {
+      ...baseArgs,
+      slug: "palm",
+      name: { en: "Palm" },
+    });
+    const created = await asAdmin.query(api.communities.get, { id: third });
+    expect(created?.rank).toBe(2);
   });
 });

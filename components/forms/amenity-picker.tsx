@@ -53,7 +53,7 @@ export function AmenityPicker({
               aria-pressed={selected}
               onClick={() => toggle(amenity)}
               className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm transition-colors",
+                "inline-flex min-h-11 items-center gap-1 rounded-full border px-3 text-sm transition-colors",
                 selected
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",

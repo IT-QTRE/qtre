@@ -185,3 +185,82 @@ describe("developers.remove", () => {
     await expect(asAdmin.mutation(api.developers.remove, { id })).rejects.toThrow();
   });
 });
+
+describe("developers.setPublishingStatus", () => {
+  test("publishes a draft, keeps the slug, and sets publishedAt", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.developers.create, baseArgs);
+
+    await asAdmin.mutation(api.developers.setPublishingStatus, { id, status: "published" });
+    const doc = await asAdmin.query(api.developers.get, { id });
+    expect(doc?.publishing.status).toBe("published");
+    expect(doc?.publishing.slug).toBe("emaar");
+    expect(doc?.publishing.publishedAt).toEqual(expect.any(Number));
+  });
+
+  test("moves a published developer to draft without clearing publishedAt or slug", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.developers.create, { ...baseArgs, status: "published" });
+    const published = await asAdmin.query(api.developers.get, { id });
+
+    await asAdmin.mutation(api.developers.setPublishingStatus, { id, status: "draft" });
+    const doc = await asAdmin.query(api.developers.get, { id });
+    expect(doc?.publishing.status).toBe("draft");
+    expect(doc?.publishing.slug).toBe("emaar");
+    expect(doc?.publishing.publishedAt).toBe(published?.publishing.publishedAt);
+  });
+
+  test("rejects an agent toggling publishing status", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.developers.create, baseArgs);
+    const asAgent = await seedUser(t, "clerk|agent-1", "agent");
+
+    await expect(asAgent.mutation(api.developers.setPublishingStatus, { id, status: "published" })).rejects.toThrow(
+      ForbiddenError,
+    );
+  });
+});
+
+describe("developers.reorder", () => {
+  test("writes rank 0…n for the exact set of ids", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const first = await asAdmin.mutation(api.developers.create, baseArgs);
+    const second = await asAdmin.mutation(api.developers.create, {
+      ...baseArgs,
+      slug: "damac",
+      name: { en: "Damac" },
+    });
+    const third = await asAdmin.mutation(api.developers.create, {
+      ...baseArgs,
+      slug: "nakheel",
+      name: { en: "Nakheel" },
+    });
+
+    await asAdmin.mutation(api.developers.reorder, { orderedIds: [third, first, second] });
+
+    const listed = await asAdmin.query(api.developers.list, {});
+    const byId = new Map(listed.map((row) => [row._id, row]));
+    expect(byId.get(third)?.rank).toBe(0);
+    expect(byId.get(first)?.rank).toBe(1);
+    expect(byId.get(second)?.rank).toBe(2);
+  });
+
+  test("rejects a partial id list", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const first = await asAdmin.mutation(api.developers.create, baseArgs);
+    await asAdmin.mutation(api.developers.create, {
+      ...baseArgs,
+      slug: "damac",
+      name: { en: "Damac" },
+    });
+
+    await expect(asAdmin.mutation(api.developers.reorder, { orderedIds: [first] })).rejects.toThrow(
+      "orderedIds must be exactly the set of developers",
+    );
+  });
+});

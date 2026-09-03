@@ -3,6 +3,11 @@ import { getRequestConfig } from "next-intl/server";
 import { notFound } from "next/navigation";
 import * as rootParams from "next/root-params";
 import { routing } from "./routing";
+import en from "../messages/en.json";
+import ar from "../messages/ar.json";
+import tr from "../messages/tr.json";
+
+const messagesByLocale = { en, ar, tr } as const;
 
 export default getRequestConfig(async () => {
   const paramValue = await rootParams.locale();
@@ -24,6 +29,6 @@ export default getRequestConfig(async () => {
     // zone — this is a Dubai property site, so UTC+4 is the correct default
     // regardless of where the server actually runs.
     timeZone: "Asia/Dubai",
-    messages: (await import(`../messages/${locale}.json`)).default,
+    messages: messagesByLocale[locale],
   };
 });

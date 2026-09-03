@@ -1,32 +1,44 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { DeveloperForm } from "@/components/admin/developers/developer-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { useAuthedQuery } from "@/components/admin/use-authed-query";
 
 export default function DeveloperEditPage() {
   const params = useParams<{ id: string }>();
-  const developer = useQuery(api.developers.get, { id: params.id as Id<"developers"> });
+  const developer = useAuthedQuery(api.developers.get, { id: params.id as Id<"developers"> });
 
   if (developer === undefined) {
-    return <p className="text-muted-foreground">Loading…</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/developers" label="Developers" />} title="Developer" />
+        <div className="h-48 border border-border bg-muted/60" aria-hidden />
+      </div>
+    );
   }
-
   if (developer === null) {
-    return <p className="text-muted-foreground">Developer not found.</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/developers" label="Developers" />} title="Developer" />
+        <p className="max-w-prose text-sm text-muted-foreground">This developer is not in your catalog.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/developers" label="Back to Developers" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{developer.name.en}</h1>
-        <p className="text-muted-foreground">Edit developer profile.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/developers" label="Developers" />}
+          title={developer.name.en}
+          description="Edit profile, logo, and publishing."
+        />
+        <DeveloperForm mode="edit" developer={developer} />
       </div>
-      <DeveloperForm mode="edit" developer={developer} />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

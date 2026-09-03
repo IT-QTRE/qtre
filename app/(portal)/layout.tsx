@@ -3,6 +3,7 @@ import { Geist_Mono, Inter, Poppins } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "../globals.css";
 import { cn } from "@/lib/utils";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -33,7 +34,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       className={cn("h-full", "antialiased", inter.variable, poppins.variable, geistMono.variable, "font-sans")}
     >
       <body className="flex min-h-full flex-col overflow-x-hidden">
-        <ClerkProvider>
+        <ClerkProvider afterSignOutUrl="/sign-in" appearance={clerkAppearance}>
           <ConvexClientProvider>{children}</ConvexClientProvider>
         </ClerkProvider>
         <Toaster richColors position="top-right" />

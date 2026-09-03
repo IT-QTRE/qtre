@@ -10,3 +10,11 @@ export const leadSchema = z.object({
   status: z.enum(["new", "contacted", "qualified", "closed"]).default("new"),
   assignedAgentId: z.string().optional(),
 });
+
+export const listingInquirySchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.email(),
+  phone: z.string().optional(),
+  message: z.string().optional(),
+  companyUrl: z.string().optional(),
+});

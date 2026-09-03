@@ -78,6 +78,18 @@ describe("agents.create", () => {
     await expect(asAdmin.mutation(api.agents.create, { ...baseArgs, name: "Another Agent" })).rejects.toThrow();
   });
 
+  test("stores an optional position and clears it on update", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.agents.create, { ...baseArgs, position: "Sales Manager" });
+    const created = await asAdmin.query(api.agents.get, { id });
+    expect(created?.position).toBe("Sales Manager");
+
+    await asAdmin.mutation(api.agents.update, { id, ...baseArgs, name: "Jane Updated" });
+    const cleared = await asAdmin.query(api.agents.get, { id });
+    expect(cleared?.position).toBeUndefined();
+  });
+
   test("accepts an optional userId linking to a users row", async () => {
     const t = convexTest(schema, modules);
     const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
@@ -144,5 +156,43 @@ describe("agents.remove", () => {
 
     const auditLogs = await t.run(async (ctx) => await ctx.db.query("auditLogs").collect());
     expect(auditLogs.some((log) => log.resource === "agents" && log.action === "delete")).toBe(true);
+  });
+});
+
+describe("agents.setPublishingStatus", () => {
+  test("publishes a draft, keeps the slug, and sets publishedAt", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.agents.create, baseArgs);
+
+    await asAdmin.mutation(api.agents.setPublishingStatus, { id, status: "published" });
+    const doc = await asAdmin.query(api.agents.get, { id });
+    expect(doc?.publishing.status).toBe("published");
+    expect(doc?.publishing.slug).toBe("jane-doe");
+    expect(doc?.publishing.publishedAt).toEqual(expect.any(Number));
+  });
+
+  test("moves a published agent to draft without clearing publishedAt or slug", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.agents.create, { ...baseArgs, status: "published" });
+    const published = await asAdmin.query(api.agents.get, { id });
+
+    await asAdmin.mutation(api.agents.setPublishingStatus, { id, status: "draft" });
+    const doc = await asAdmin.query(api.agents.get, { id });
+    expect(doc?.publishing.status).toBe("draft");
+    expect(doc?.publishing.slug).toBe("jane-doe");
+    expect(doc?.publishing.publishedAt).toBe(published?.publishing.publishedAt);
+  });
+
+  test("rejects an agent toggling publishing status", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    const id = await asAdmin.mutation(api.agents.create, baseArgs);
+    const asAgent = await seedUser(t, "clerk|agent-1", "agent");
+
+    await expect(asAgent.mutation(api.agents.setPublishingStatus, { id, status: "published" })).rejects.toThrow(
+      ForbiddenError,
+    );
   });
 });

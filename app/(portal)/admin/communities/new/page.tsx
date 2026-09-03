@@ -1,17 +1,20 @@
 "use client";
 
 import { CommunityForm } from "@/components/admin/communities/community-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 export default function NewCommunityPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/communities" label="Back to Communities" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Add Community</h1>
-        <p className="text-muted-foreground">Create a new community profile.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/communities" label="Communities" />}
+          title="New community"
+          description="Add a neighborhood to the catalog."
+        />
+        <CommunityForm mode="create" />
       </div>
-      <CommunityForm mode="create" />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

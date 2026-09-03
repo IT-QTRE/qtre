@@ -1,17 +1,19 @@
 "use client";
 
 import { WebsiteSettingsForm } from "@/components/admin/settings/website-settings-form";
+import { UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 export default function WebsiteSettingsPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Website Settings</h1>
-        <p className="text-muted-foreground">
-          Manage site-wide contact info, social links, and default SEO.
-        </p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          title="Website Settings"
+          description="Site-wide contact, social links, and fallback SEO."
+        />
+        <WebsiteSettingsForm />
       </div>
-      <WebsiteSettingsForm />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

@@ -1,32 +1,44 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { CommunityForm } from "@/components/admin/communities/community-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { useAuthedQuery } from "@/components/admin/use-authed-query";
 
 export default function CommunityEditPage() {
   const params = useParams<{ id: string }>();
-  const community = useQuery(api.communities.get, { id: params.id as Id<"communities"> });
+  const community = useAuthedQuery(api.communities.get, { id: params.id as Id<"communities"> });
 
   if (community === undefined) {
-    return <p className="text-muted-foreground">Loading…</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/communities" label="Communities" />} title="Community" />
+        <div className="h-48 border border-border bg-muted/60" aria-hidden />
+      </div>
+    );
   }
-
   if (community === null) {
-    return <p className="text-muted-foreground">Community not found.</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/communities" label="Communities" />} title="Community" />
+        <p className="max-w-prose text-sm text-muted-foreground">This community is not in your catalog.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/communities" label="Back to Communities" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{community.name.en}</h1>
-        <p className="text-muted-foreground">Edit community profile.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/communities" label="Communities" />}
+          title={community.name.en}
+          description="Edit neighborhood, photos, and publishing."
+        />
+        <CommunityForm mode="edit" community={community} />
       </div>
-      <CommunityForm mode="edit" community={community} />
-    </div>
+    </UnsavedChangesProvider>
   );
 }

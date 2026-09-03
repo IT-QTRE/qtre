@@ -32,6 +32,8 @@ type DataTableProps<TData extends Record<string, unknown>> = {
   /** Column id whose value the global search filters against. */
   filterColumnId?: string;
   bulkActions?: (selected: TData[]) => React.ReactNode;
+  toolbar?: React.ReactNode;
+  emptyMessage?: string;
 };
 
 export function DataTable<TData extends Record<string, unknown>>({
@@ -40,6 +42,8 @@ export function DataTable<TData extends Record<string, unknown>>({
   searchPlaceholder,
   filterColumnId,
   bulkActions,
+  toolbar,
+  emptyMessage,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState({});
@@ -65,16 +69,19 @@ export function DataTable<TData extends Record<string, unknown>>({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <Input
           placeholder={searchPlaceholder ?? "Search..."}
           value={globalFilter}
           onChange={(event) => setGlobalFilter(event.target.value)}
-          className="max-w-sm"
+          className="max-w-sm rounded-none"
         />
-        {bulkActions && selectedRows.length > 0 && bulkActions(selectedRows)}
+        <div className="flex flex-wrap items-center gap-2">
+          {toolbar}
+          {bulkActions && selectedRows.length > 0 ? bulkActions(selectedRows) : null}
+        </div>
       </div>
-      <div className="overflow-x-auto rounded-md border">
+      <div className="overflow-x-auto border border-border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -99,21 +106,23 @@ export function DataTable<TData extends Record<string, unknown>>({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  No results.
+                  {emptyMessage ?? "No results."}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-          Previous
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-          Next
-        </Button>
-      </div>
+      {table.getCanPreviousPage() || table.getCanNextPage() ? (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+            Previous
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            Next
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

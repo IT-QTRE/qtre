@@ -1,10 +1,49 @@
 import { z } from "zod";
 
+// English is required. ar/tr are optional — but a mounted form still submits
+// `ar: ""` / `tr: ""` for blank tabs. `.min(1).optional()` only allows
+// `undefined`, so those empty strings were failing as "Required".
 export const localizedTextSchema = z.object({
-  en: z.string().min(1),
-  ar: z.string().min(1).optional(),
-  tr: z.string().min(1).optional(),
+  en: z.string().min(1, "Required"),
+  ar: z.string().optional(),
+  tr: z.string().optional(),
 });
+
+type LocalizedDraft = { en?: string; ar?: string; tr?: string };
+
+function localeHasCopy(value: string | undefined) {
+  return Boolean(value?.trim());
+}
+
+function localizedHasAnyCopy(value: LocalizedDraft | undefined) {
+  if (!value) return false;
+  return localeHasCopy(value.en) || localeHasCopy(value.ar) || localeHasCopy(value.tr);
+}
+
+export function compactLocalized(value: LocalizedDraft | undefined) {
+  if (!localizedHasAnyCopy(value) || !localeHasCopy(value?.en)) return undefined;
+  return {
+    en: value!.en!.trim(),
+    ...(localeHasCopy(value!.ar) ? { ar: value!.ar!.trim() } : {}),
+    ...(localeHasCopy(value!.tr) ? { tr: value!.tr!.trim() } : {}),
+  };
+}
+
+// Optional localized fields (SEO title/description): a collapsed empty input
+// still registers `{ en: "" }` or `{ en: undefined }`. `localizedTextSchema`
+// requires English, which turned "leave SEO blank" into a hidden validation
+// error. Blank = omitted; any translation still needs English.
+export const optionalLocalizedTextSchema = z
+  .object({
+    en: z.string().optional(),
+    ar: z.string().optional(),
+    tr: z.string().optional(),
+  })
+  .optional()
+  .refine((value) => !localizedHasAnyCopy(value) || localeHasCopy(value?.en), {
+    message: "English is required if you add a translation",
+    path: ["en"],
+  });
 
 // `.email()`/`.url()` combined with plain `.optional()` only accepts
 // `undefined` — a cleared input still submits `""`, which then fails format
@@ -35,10 +74,21 @@ export const optionalCanonicalPathSchema = z
   });
 
 export const seoFieldsSchema = z.object({
-  seoTitle: localizedTextSchema.optional(),
-  seoDescription: localizedTextSchema.optional(),
+  seoTitle: optionalLocalizedTextSchema,
+  seoDescription: optionalLocalizedTextSchema,
   canonicalPath: optionalCanonicalPathSchema,
 });
+
+export type SeoFieldsInput = z.input<typeof seoFieldsSchema>;
+
+export function compactSeoFields(seo: SeoFieldsInput | undefined) {
+  if (!seo) return undefined;
+  const seoTitle = compactLocalized(seo.seoTitle);
+  const seoDescription = compactLocalized(seo.seoDescription);
+  const canonicalPath = seo.canonicalPath?.trim() ? seo.canonicalPath.trim() : undefined;
+  if (!seoTitle && !seoDescription && !canonicalPath) return undefined;
+  return { seoTitle, seoDescription, canonicalPath };
+}
 
 export const paymentMilestoneSchema = z.object({
   label: z.string().min(1, "Required"),

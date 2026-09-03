@@ -1,31 +1,44 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { PropertyForm } from "@/components/admin/properties/property-form";
-import { BackLink } from "@/components/admin/back-link";
+import { GuardedBackLink, UnsavedChangesProvider } from "@/components/admin/unsaved-changes";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { useAuthedQuery } from "@/components/admin/use-authed-query";
 
 export default function PropertyEditPage() {
   const params = useParams<{ id: string }>();
-  const property = useQuery(api.properties.get, { id: params.id as Id<"properties"> });
+  const property = useAuthedQuery(api.properties.get, { id: params.id as Id<"properties"> });
 
   if (property === undefined) {
-    return <p className="text-muted-foreground">Loading…</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/properties" label="Properties" />} title="Property" />
+        <div className="h-48 border border-border bg-muted/60" aria-hidden />
+      </div>
+    );
   }
   if (property === null) {
-    return <p className="text-muted-foreground">Property not found.</p>;
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader back={<GuardedBackLink href="/admin/properties" label="Properties" />} title="Property" />
+        <p className="max-w-prose text-sm text-muted-foreground">This property is not in your catalog.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <BackLink href="/admin/properties" label="Back to Properties" />
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{property.title.en}</h1>
-        <p className="text-muted-foreground">Edit property listing.</p>
+    <UnsavedChangesProvider>
+      <div className="space-y-8">
+        <AdminPageHeader
+          back={<GuardedBackLink href="/admin/properties" label="Properties" />}
+          title={property.title.en}
+          description="Edit listing, photos, and publishing."
+        />
+        <PropertyForm mode="edit" property={property} />
       </div>
-      <PropertyForm mode="edit" property={property} />
-    </div>
+    </UnsavedChangesProvider>
   );
 }
