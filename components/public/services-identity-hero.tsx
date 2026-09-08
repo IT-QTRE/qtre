@@ -8,12 +8,14 @@ export function ServicesIdentityHero({
   title,
   intro,
   contactLabel,
+  ctaHref = "/contact",
   headingId,
 }: {
   label: string;
   title: string;
   intro: string;
   contactLabel: string;
+  ctaHref?: string;
   headingId: string;
 }) {
   return (
@@ -29,7 +31,7 @@ export function ServicesIdentityHero({
           <p className="font-heading text-sm font-medium tracking-[0.16em] text-secondary uppercase">{label}</p>
           <h1
             id={headingId}
-            className="mt-6 max-w-[12ch] font-heading text-[clamp(2.75rem,10vw,6rem)] font-semibold leading-[1.02] tracking-tight text-balance"
+            className="mt-6 max-w-[12ch] scroll-mt-28 font-heading text-[clamp(2.75rem,10vw,6rem)] font-semibold leading-[1.02] tracking-tight text-balance"
           >
             {title}
           </h1>
@@ -40,12 +42,21 @@ export function ServicesIdentityHero({
           <p className="max-w-prose text-base leading-relaxed text-pretty text-primary-foreground/85 sm:text-lg">
             {intro}
           </p>
-          <Link
-            href="/contact"
-            className="mt-10 inline-flex min-h-12 items-center justify-center bg-secondary px-6 font-heading text-sm font-medium tracking-[0.14em] text-primary uppercase transition-colors hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
-          >
-            {contactLabel}
-          </Link>
+          {ctaHref.startsWith("#") ? (
+            <a
+              href={ctaHref}
+              className="mt-10 inline-flex min-h-12 items-center justify-center bg-secondary px-6 font-heading text-sm font-medium tracking-[0.14em] text-primary uppercase transition-colors hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+            >
+              {contactLabel}
+            </a>
+          ) : (
+            <Link
+              href={ctaHref}
+              className="mt-10 inline-flex min-h-12 items-center justify-center bg-secondary px-6 font-heading text-sm font-medium tracking-[0.14em] text-primary uppercase transition-colors hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+            >
+              {contactLabel}
+            </Link>
+          )}
         </div>
       </div>
     </header>

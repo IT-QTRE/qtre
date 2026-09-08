@@ -5,6 +5,11 @@ import { seoFieldsValidator, publishingFieldsValidator } from "./lib/seoFields";
 import { relatedValidator } from "./lib/blogRelated";
 import { mediaEntityTypeValidator } from "./lib/mediaEntityType";
 import { roleValidator, resourceValidator } from "./lib/roles";
+import {
+  serviceDeskSlugValidator,
+  serviceGroupValidator,
+  serviceLeadStatusValidator,
+} from "./lib/serviceDesks";
 import { propertySharedFactsValidator } from "./lib/propertyFacts";
 import { furnishingValidator, propertyTypeValidator, rentalPeriodValidator } from "./lib/propertyAttributes";
 import { completionDateValidator } from "./lib/completionDate";
@@ -196,6 +201,24 @@ export default defineSchema({
     .index("by_assigned_agent", ["assignedAgentId"])
     .index("by_created_at", ["createdAt"]),
 
+  // Visa/license wizard on Services pages — not listing inquiries (`leads`)
+  // and not GHL Contact/chat. Assigned to an Admin user, never an Agent.
+  serviceLeads: defineTable({
+    name: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    message: v.optional(v.string()),
+    group: serviceGroupValidator,
+    desk: serviceDeskSlugValidator,
+    status: serviceLeadStatusValidator,
+    assignedUserId: v.optional(v.id("users")),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_assigned_user", ["assignedUserId"])
+    .index("by_created_at", ["createdAt"])
+    .index("by_group_and_desk", ["group", "desk"]),
+
   blogCategories: defineTable({
     name: localizedTextValidator,
     slug: v.string(),
@@ -233,6 +256,9 @@ export default defineSchema({
     ),
     defaultSeo: v.optional(seoFieldsValidator),
     contactFormUrl: v.optional(v.string()),
+    chatWidgetId: v.optional(v.string()),
+    // Previous name — keep until the settings row is saved again (replace drops it).
+    contactChatWidgetId: v.optional(v.string()),
     updatedAt: v.number(),
   }),
 

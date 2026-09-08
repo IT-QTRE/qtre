@@ -4,6 +4,7 @@ import { requireRole } from "./lib/permissions";
 import { writeAuditLog } from "./lib/auditLog";
 import { seoFieldsValidator } from "./lib/seoFields";
 import { safeGhlFormUrl } from "./lib/ghlFormUrl";
+import { safeGhlChatWidgetId } from "./lib/ghlChatWidgetId";
 import { whatsappHref } from "./lib/whatsappHref";
 
 function resolvedContactFormUrl(value: string | undefined) {
@@ -19,6 +20,13 @@ function resolvedWhatsapp(value: string | undefined) {
   return value.trim();
 }
 
+function resolvedChatWidgetId(value: string | undefined) {
+  if (!value?.trim()) return undefined;
+  const safe = safeGhlChatWidgetId(value);
+  if (!safe) throw new Error("Paste the chat widget ID or the loader script.");
+  return safe;
+}
+
 const publicSettingsValidator = v.union(
   v.null(),
   v.object({
@@ -27,6 +35,7 @@ const publicSettingsValidator = v.union(
     contactPhone: v.optional(v.string()),
     contactWhatsapp: v.optional(v.string()),
     contactFormUrl: v.optional(v.string()),
+    chatWidgetId: v.optional(v.string()),
     socialLinks: v.optional(
       v.object({
         facebook: v.optional(v.string()),
@@ -58,6 +67,10 @@ export const publicGet = query({
       contactPhone: settings.contactPhone,
       contactWhatsapp: settings.contactWhatsapp && whatsappHref(settings.contactWhatsapp) ? settings.contactWhatsapp : undefined,
       contactFormUrl: safeGhlFormUrl(settings.contactFormUrl) ?? undefined,
+      chatWidgetId:
+        safeGhlChatWidgetId(settings.chatWidgetId) ??
+        safeGhlChatWidgetId(settings.contactChatWidgetId) ??
+        undefined,
       socialLinks: settings.socialLinks,
     };
   },
@@ -70,6 +83,7 @@ export const upsert = mutation({
     contactPhone: v.optional(v.string()),
     contactWhatsapp: v.optional(v.string()),
     contactFormUrl: v.optional(v.string()),
+    chatWidgetId: v.optional(v.string()),
     socialLinks: v.optional(
       v.object({
         facebook: v.optional(v.string()),
@@ -84,9 +98,15 @@ export const upsert = mutation({
     const actor = await requireRole(ctx, "websiteSettings", "update");
     const existing = await ctx.db.query("websiteSettings").first();
     const now = Date.now();
-    const { contactFormUrl: rawFormUrl, contactWhatsapp: rawWhatsapp, ...rest } = args;
+    const {
+      contactFormUrl: rawFormUrl,
+      contactWhatsapp: rawWhatsapp,
+      chatWidgetId: rawChatId,
+      ...rest
+    } = args;
     const contactFormUrl = resolvedContactFormUrl(rawFormUrl);
     const contactWhatsapp = resolvedWhatsapp(rawWhatsapp);
+    const chatWidgetId = resolvedChatWidgetId(rawChatId);
 
     let id;
     if (existing) {
@@ -97,6 +117,7 @@ export const upsert = mutation({
         ...(rest.contactPhone ? { contactPhone: rest.contactPhone } : {}),
         ...(contactWhatsapp ? { contactWhatsapp } : {}),
         ...(contactFormUrl ? { contactFormUrl } : {}),
+        ...(chatWidgetId ? { chatWidgetId } : {}),
         ...(rest.socialLinks ? { socialLinks: rest.socialLinks } : {}),
         ...(rest.defaultSeo ? { defaultSeo: rest.defaultSeo } : {}),
       });
@@ -107,6 +128,7 @@ export const upsert = mutation({
         updatedAt: now,
         ...(contactWhatsapp ? { contactWhatsapp } : {}),
         ...(contactFormUrl ? { contactFormUrl } : {}),
+        ...(chatWidgetId ? { chatWidgetId } : {}),
       });
     }
 

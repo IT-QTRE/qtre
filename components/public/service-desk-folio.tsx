@@ -18,9 +18,12 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { ProfileBreadcrumb } from "@/components/public/profile-breadcrumb";
+import { ServiceInquiryWizard } from "@/components/public/service-inquiry-wizard";
 import { Link } from "@/i18n/navigation";
 import { publicGutter } from "@/lib/public-layout";
+import type { ServiceGroup } from "@/lib/service-desks";
 import { cn } from "@/lib/utils";
 
 export type DeskMark =
@@ -62,42 +65,6 @@ const DESK_MARKS: Record<DeskMark, LucideIcon> = {
   users: Users,
   usersRound: UsersRound,
 };
-
-function ApplyLink({
-  label,
-  tone,
-  headingId,
-}: {
-  label: string;
-  tone: "onPrimary" | "onPaper";
-  headingId?: string;
-}) {
-  if (tone === "onPrimary") {
-    return (
-      <Link
-        href="/contact"
-        className="inline-flex min-h-12 items-center justify-center bg-secondary px-6 font-heading text-sm font-medium tracking-[0.14em] text-primary uppercase transition-colors hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
-      >
-        {label}
-      </Link>
-    );
-  }
-
-  return (
-    <Link
-      href="/contact"
-      className="group inline-flex min-h-11 flex-col items-start justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <span
-        id={headingId}
-        className="font-heading text-sm font-medium tracking-[0.16em] text-secondary uppercase"
-      >
-        {label}
-      </span>
-      <span className="mt-3 h-px w-10 bg-secondary transition-[width] duration-300 ease-out group-hover:w-16 motion-reduce:transition-none" />
-    </Link>
-  );
-}
 
 function DossierHeading({ id, children }: { id: string; children: string }) {
   return (
@@ -208,7 +175,7 @@ function FactList({ id, title, items }: { id: string; title: string; items: stri
   );
 }
 
-export function ServiceDeskFolio({
+export async function ServiceDeskFolio({
   title,
   intro,
   about,
@@ -223,13 +190,13 @@ export function ServiceDeskFolio({
   extraLists,
   coversTitle,
   covers,
-  applyLabel,
-  contactLabel,
   breadcrumbLabel,
   homeLabel,
   parentLabel,
   siblingsTitle,
   siblings,
+  inquiryGroup,
+  inquiryDesk,
 }: {
   title: string;
   intro: string;
@@ -246,28 +213,38 @@ export function ServiceDeskFolio({
   coversTitle?: string;
   covers?: DeskType[];
   applyLabel?: string;
-  contactLabel: string;
   breadcrumbLabel: string;
   homeLabel: string;
   parentLabel: string;
   siblingsTitle: string;
   siblings: Sibling[];
+  inquiryGroup: ServiceGroup;
+  inquiryDesk: string;
 }) {
-  const closeLabel = applyLabel ?? contactLabel;
-  const lede = about ?? intro;
+  const tServices = await getTranslations("servicesPage");
+  const tInquiry = await getTranslations("serviceInquiry");
+  const dossierLede = about && about !== intro ? about : undefined;
   const hasDossier = Boolean(
-    (types && types.length > 0) ||
+    dossierLede ||
+      (types && types.length > 0) ||
       (documents && documents.length > 0) ||
       (process && process.length > 0) ||
       (extraLists && extraLists.length > 0) ||
       (covers && covers.length > 0),
   );
+  const points = [
+    tInquiry("deskPointProcess"),
+    inquiryGroup === "visa" ? tServices("visaPoint3") : tServices("licensePoint3"),
+  ];
+  const note = inquiryGroup === "visa" ? tServices("visaNote") : tServices("licenseNote");
+  const badge = inquiryGroup === "visa" ? tServices("visaBadge") : tServices("licenseBadge");
 
   return (
     <main id="main">
       <header
+        id="service-inquiry"
         className={cn(
-          "relative -mt-24 bg-primary pt-24 text-primary-foreground sm:-mt-26 sm:pt-26",
+          "relative -mt-24 scroll-mt-28 bg-primary pt-24 text-primary-foreground sm:-mt-26 sm:pt-26",
           publicGutter,
         )}
       >
@@ -283,9 +260,13 @@ export function ServiceDeskFolio({
           />
           <div className="mt-10 grid gap-10 lg:mt-12 lg:grid-cols-2 lg:items-start lg:gap-x-16 xl:gap-x-24">
             <div>
+              <p className="inline-flex items-center gap-2 border border-secondary px-3 py-1 font-heading text-[0.7rem] font-medium tracking-[0.14em] text-secondary uppercase">
+                <span className="size-1.5 shrink-0 bg-secondary" aria-hidden />
+                {badge}
+              </p>
               <h1
                 id="service-desk-heading"
-                className="max-w-[12ch] font-heading text-[clamp(2.25rem,7vw,4.25rem)] font-semibold leading-[1.04] tracking-tight text-balance"
+                className="mt-5 max-w-[12ch] font-heading text-[clamp(2.25rem,7vw,4.25rem)] font-semibold leading-[1.04] tracking-tight text-balance sm:mt-6"
               >
                 {title}
               </h1>
@@ -300,15 +281,27 @@ export function ServiceDeskFolio({
                   ) : null}
                 </p>
               ) : null}
-              {applyLabel ? (
-                <div className="mt-8">
-                  <ApplyLink label={applyLabel} tone="onPrimary" />
-                </div>
-              ) : null}
+              <p className="mt-6 max-w-prose text-base leading-relaxed text-pretty text-primary-foreground/85 sm:text-lg">
+                {intro}
+              </p>
+              <ul className="mt-8 space-y-3">
+                {points.map((point) => (
+                  <li key={point} className="flex items-start gap-3 text-sm leading-relaxed text-pretty sm:text-base">
+                    <Check className="mt-0.5 size-4 shrink-0 text-secondary" strokeWidth={2.25} aria-hidden />
+                    <span className="min-w-0 text-primary-foreground/80">{point}</span>
+                  </li>
+                ))}
+              </ul>
+              <aside className="mt-8 border border-secondary/40 bg-primary-foreground/8 px-5 py-5">
+                <p className="font-heading text-[0.65rem] font-medium tracking-[0.14em] text-secondary uppercase">
+                  {tServices("inquiryNoteLabel")}
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-pretty text-primary-foreground/80">{note}</p>
+              </aside>
             </div>
-            <p className="max-w-prose text-base leading-relaxed text-pretty text-primary-foreground/85 sm:text-lg lg:border-s lg:border-secondary lg:ps-12 xl:ps-16">
-              {lede}
-            </p>
+            <div className="text-foreground lg:border-s lg:border-secondary lg:ps-12 xl:ps-16">
+              <ServiceInquiryWizard initialGroup={inquiryGroup} initialDesk={inquiryDesk} />
+            </div>
           </div>
         </div>
       </header>
@@ -316,6 +309,12 @@ export function ServiceDeskFolio({
       {hasDossier ? (
         <section className="relative bg-background text-foreground" aria-labelledby="service-desk-heading">
           <div className={cn("py-14 sm:py-16 lg:py-20", publicGutter)}>
+            {dossierLede ? (
+              <p className="max-w-prose text-base leading-relaxed text-pretty text-foreground/80 sm:text-lg">
+                {dossierLede}
+              </p>
+            ) : null}
+
             {types && types.length > 0 && typesTitle ? (
               <TypeGrid id="service-desk-types-heading" title={typesTitle} items={types} />
             ) : null}
@@ -369,13 +368,6 @@ export function ServiceDeskFolio({
           </div>
         </section>
       ) : null}
-
-      <section className="relative bg-background text-foreground" aria-labelledby="service-desk-contact-heading">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-secondary" />
-        <div className={cn("py-12 sm:py-14", publicGutter)}>
-          <ApplyLink label={closeLabel} tone="onPaper" headingId="service-desk-contact-heading" />
-        </div>
-      </section>
     </main>
   );
 }

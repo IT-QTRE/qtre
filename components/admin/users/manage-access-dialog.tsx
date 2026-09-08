@@ -28,6 +28,7 @@ const RESOURCE_LABELS: Record<ToggleableResource, string> = {
   agents: "Agents",
   communities: "Communities",
   leads: "Leads",
+  serviceLeads: "Service leads",
   blogPosts: "Blog",
   mediaItems: "Media Library",
   users: "Users & Roles",

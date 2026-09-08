@@ -8,7 +8,7 @@ The new platform will support:
 
 - A public-facing real estate website
 - Property and project listings
-- Lead and inquiry collection — split by source: the general Contact page uses an embedded GoHighLevel form (see "GoHighLevel" below), while property/project-specific inquiries are stored in our own `leads` table (see "Convex data areas" below), since those need real `propertyId`/`projectId`/`agentId` foreign keys to power the admin Leads screen and Agent Portal
+- Lead and inquiry collection — split by source: Contact form + public chat stay in GoHighLevel; listing/project inquiries go to `leads`; visa/license inquiries from Services go to `serviceLeads` (admin tab, assignable to an Admin user).
 - Agent and developer profiles
 - Blog and SEO content
 - A secure internal admin dashboard
@@ -96,6 +96,7 @@ React Hook Form will manage complex forms such as:
 - Project creation and editing
 - Agent profiles
 - Property/project inquiry ("Contact this agent about this listing") forms — a Convex mutation writes into the `leads` table
+- Visa/license inquiry wizard on Services pages — a Convex mutation writes into the `serviceLeads` table
 - Website settings
 
 The public Contact page's general form is the one exception — it's an embedded GoHighLevel form (see "GoHighLevel" below), not a React Hook Form + Convex form.
@@ -137,6 +138,7 @@ Possible Convex data areas include:
 - Agents
 - Communities (country-aware — see `docs/superpowers/specs/2026-08-08-communities-and-media-model.md`)
 - Leads (property/project inquiries only — not the general Contact page, which uses GoHighLevel; see "GoHighLevel" below)
+- Service leads (visa/license wizard on Services — not listing inquiries, not GHL)
 - Property submissions
 - Blog posts
 - Website settings
@@ -146,14 +148,14 @@ Possible Convex data areas include:
 
 ---
 
-## GoHighLevel (Contact Page Only)
+## GoHighLevel (Contact form + public chat)
 
-GoHighLevel (GHL) is used **only** for the general public Contact page —
-nowhere else. It embeds GHL's provided form snippet (script/iframe embed)
-client-side; submissions go straight to GoHighLevel. There is no Convex
-mutation, no `leads` table row, and no server-side spam handling on our end
-for this specific form — GHL's hosted form handles its own submission
-processing and spam protection.
+GoHighLevel (GHL) is used for the general public Contact **form** and, when
+published in Website Settings, the public **chat widget** — nowhere else. The
+Contact page embeds an allowlisted form iframe; the catalog layout loads GHL’s
+official chat loader with a stored widget ID. Submissions and chat stay in
+GoHighLevel. There is no Convex mutation, no `leads` table row, and no
+server-side spam handling on our end for these — GHL handles that.
 
 Every other lead-capture point — property inquiries, project inquiries, any
 "Contact this agent about this listing" CTA — is **not** GHL. Those go
@@ -161,6 +163,10 @@ through our own `leads` table (see "Convex data areas" above) via a Convex
 mutation, because they need real `propertyId`/`projectId`/`agentId` foreign
 keys to power the admin Leads screen and the Agent Portal's assigned-leads
 view — data a generic external form has no way to carry natively.
+
+Visa and license inquiries from the Services wizard are also **not** GHL.
+They write to `serviceLeads` and appear under Admin → Service leads. Agents
+do not see that inbox.
 
 GHL workflows/automations do support an outbound webhook action that could
 also forward Contact-page submissions into Convex later, if we ever want a
@@ -545,7 +551,7 @@ Next.js Application
 │   ├── Scheduled Functions
 │   └── Authorization
 │
-├── GoHighLevel (embedded form only, external system — Contact page only)
+├── GoHighLevel (form iframe + optional chat widget, external — not Convex leads)
 │   └── Lead capture + CRM (Contact page general inquiries)
 │
 └── Vercel

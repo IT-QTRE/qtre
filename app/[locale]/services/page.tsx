@@ -32,9 +32,10 @@ export default async function ServicesPage() {
   const toItems = (group: "visa" | "license") =>
     desksInGroup(group).map((desk) => ({
       name: tServices(desk.nameKey),
-      body: tServices(desk.bodyKey),
       types: "typesKey" in desk ? tServices(desk.typesKey) : undefined,
       href: serviceDeskPath(desk),
+      group: desk.group,
+      slug: desk.slug,
     }));
 
   return (
@@ -48,7 +49,6 @@ export default async function ServicesPage() {
         { name: tNav("rent"), body: tServices("catalogRentBody"), href: "/properties?status=rent" },
         { name: tNav("offplan"), body: tServices("catalogOffplanBody"), href: "/projects" },
       ]}
-      wrapTitle={tServices("wrapTitle")}
       wrapItems={[
         { title: tServices("wrapSourceTitle"), body: tServices("wrapSourceBody") },
         { title: tServices("wrapDiligenceTitle"), body: tServices("wrapDiligenceBody") },
@@ -56,15 +56,9 @@ export default async function ServicesPage() {
         { title: tServices("wrapResidencyTitle"), body: tServices("wrapResidencyBody") },
         { title: tServices("wrapAfterTitle"), body: tServices("wrapAfterBody") },
       ]}
-      groupTitle={tServices("groupTitle")}
-      groupIntro={tServices("groupIntro")}
-      visaTitle={tServices("visaTitle")}
       visaItems={toItems("visa")}
-      licenseTitle={tServices("licenseTitle")}
       licenseItems={toItems("license")}
-      contactLabel={tNav("contact")}
-      contactTitle={tHome("contactTitle")}
-      contactBody={tHome("contactBody")}
+      contactLabel={tServices("inquiryCta")}
     />
   );
 }

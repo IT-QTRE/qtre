@@ -31,11 +31,12 @@ export default async function AdminHomePage() {
   const { getToken } = await auth();
   const token = (await getToken()) ?? undefined;
 
-  const [currentUser, projects, properties, leads, blogPosts] = await Promise.all([
+  const [currentUser, projects, properties, leads, serviceLeads, blogPosts] = await Promise.all([
     fetchQuery(api.users.current, {}, { token }),
     fetchQuery(api.projects.list, {}, { token }),
     fetchQuery(api.properties.list, {}, { token }),
     fetchQuery(api.leads.list, {}, { token }),
+    fetchQuery(api.serviceLeads.list, {}, { token }),
     fetchQuery(api.blogPosts.list, {}, { token }),
   ]);
 
@@ -45,6 +46,7 @@ export default async function AdminHomePage() {
   const showProjects = canAccess(role, disabled, "projects");
   const showBlog = canAccess(role, disabled, "blogPosts");
   const showLeads = canAccess(role, disabled, "leads");
+  const showServiceLeads = canAccess(role, disabled, "serviceLeads");
 
   const attention: AttentionItem[] = [
     ...properties
@@ -74,13 +76,13 @@ export default async function AdminHomePage() {
         kind: "Draft post",
         at: row.publishing.updatedAt,
       })),
-    ...leads
+    ...serviceLeads
       .filter((row) => row.status === "new")
       .map((row) => ({
         id: row._id,
-        href: `/admin/leads/${row._id}`,
+        href: `/admin/service-leads/${row._id}`,
         title: row.name,
-        kind: "New lead",
+        kind: "New service lead",
         at: row.createdAt,
       })),
   ]
@@ -160,6 +162,13 @@ export default async function AdminHomePage() {
           <p className="mt-4">
             <Link href="/admin/leads" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
               All leads
+            </Link>
+          </p>
+        ) : null}
+        {showServiceLeads && serviceLeads.some((lead) => lead.status === "new") ? (
+          <p className="mt-4">
+            <Link href="/admin/service-leads" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+              All service leads
             </Link>
           </p>
         ) : null}

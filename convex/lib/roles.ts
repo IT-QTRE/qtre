@@ -11,10 +11,10 @@ export const roleValidator = v.union(
 
 export type Role = Infer<typeof roleValidator>;
 
-// "leads" here means property/project inquiries only — the general
-// Contact page's GoHighLevel form never touches Convex, so it has no
-// resource here at all. `propertySubmissions` (client-submitted properties
-// pending review) is a separate, unrelated concept.
+// "leads" = listing/project inquiries. "serviceLeads" = visa/license
+// wizard on Services pages. Contact form + public chat stay in
+// GoHighLevel and have no resource here. `propertySubmissions` is
+// client-submitted properties pending review — unrelated to either inbox.
 export const RESOURCES = [
   "properties",
   "projects",
@@ -22,6 +22,7 @@ export const RESOURCES = [
   "agents",
   "communities",
   "leads",
+  "serviceLeads",
   "propertySubmissions",
   "blogPosts",
   "mediaItems",
@@ -48,6 +49,7 @@ export const PERMISSION_MATRIX: Record<Role, Record<Resource, Action[]>> = {
     agents: ["read", "create", "update", "delete"],
     communities: ["read", "create", "update", "delete"],
     leads: ["read", "create", "update", "delete"],
+    serviceLeads: ["read", "create", "update", "delete"],
     propertySubmissions: ["read", "create", "update", "delete"],
     blogPosts: ["read", "create", "update", "delete"],
     mediaItems: ["read", "create", "update", "delete"],
@@ -62,6 +64,7 @@ export const PERMISSION_MATRIX: Record<Role, Record<Resource, Action[]>> = {
     agents: ["read", "create", "update", "delete"],
     communities: ["read", "create", "update", "delete"],
     leads: ["read", "create", "update", "delete"],
+    serviceLeads: ["read", "create", "update", "delete"],
     propertySubmissions: ["read", "create", "update", "delete"],
     blogPosts: ["read", "create", "update", "delete"],
     mediaItems: ["read", "create", "update", "delete"],
@@ -80,6 +83,7 @@ export const PERMISSION_MATRIX: Record<Role, Record<Resource, Action[]>> = {
     agents: ["read"],
     communities: ["read"],
     leads: ["read", "update"],
+    serviceLeads: [],
     propertySubmissions: ["read", "update"],
     blogPosts: [],
     mediaItems: ["read", "create", "update", "delete"],
@@ -94,6 +98,7 @@ export const PERMISSION_MATRIX: Record<Role, Record<Resource, Action[]>> = {
     agents: [],
     communities: ["read"],
     leads: [],
+    serviceLeads: [],
     propertySubmissions: ["read", "create", "update"],
     blogPosts: [],
     mediaItems: ["read", "create", "delete"],
@@ -116,6 +121,7 @@ export const resourceValidator = v.union(
   v.literal("agents"),
   v.literal("communities"),
   v.literal("leads"),
+  v.literal("serviceLeads"),
   v.literal("propertySubmissions"),
   v.literal("blogPosts"),
   v.literal("mediaItems"),
@@ -136,6 +142,7 @@ export const toggleableResourceValidator = v.union(
   v.literal("agents"),
   v.literal("communities"),
   v.literal("leads"),
+  v.literal("serviceLeads"),
   v.literal("blogPosts"),
   v.literal("mediaItems"),
   v.literal("users"),
@@ -152,6 +159,7 @@ export const ADMIN_TOGGLEABLE_RESOURCES: ToggleableResource[] = [
   "agents",
   "communities",
   "leads",
+  "serviceLeads",
   "blogPosts",
   "mediaItems",
   "users",

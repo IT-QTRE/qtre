@@ -1,54 +1,17 @@
-import { ContactCloser } from "@/components/public/contact-closer";
+import { Check } from "lucide-react";
+import { getTranslations } from "next-intl/server";
+import { ServicesGroupInquiry, type GroupDeskItem } from "@/components/public/services-group-inquiry";
 import { ServicesIdentityHero } from "@/components/public/services-identity-hero";
 import { VisaBand } from "@/components/public/visa-band";
 import { Link } from "@/i18n/navigation";
 import { publicGutter } from "@/lib/public-layout";
 import { cn } from "@/lib/utils";
 
-type DeskItem = {
+type CatalogItem = {
   name: string;
   body: string;
-  types?: string;
   href: string;
 };
-
-function DeskColumn({
-  headingId,
-  title,
-  items,
-}: {
-  headingId: string;
-  title: string;
-  items: DeskItem[];
-}) {
-  return (
-    <div>
-      <h3
-        id={headingId}
-        className="font-heading text-lg font-semibold tracking-tight text-balance text-primary sm:text-xl"
-      >
-        {title}
-      </h3>
-      <div className="mt-4 h-px w-8 bg-secondary" />
-      <ul className="mt-8 border-t border-foreground/10">
-        {items.map((item) => (
-          <li key={item.name} className="border-b border-foreground/10 py-5">
-            <p className="font-heading text-base font-semibold tracking-tight text-balance">
-              <Link
-                href={item.href}
-                className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {item.name}
-              </Link>
-            </p>
-            {item.types ? <p className="mt-1.5 text-sm text-secondary">{item.types}</p> : null}
-            <p className="mt-2.5 text-sm leading-relaxed text-pretty text-foreground/70">{item.body}</p>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 export async function ServicesFolio({
   label,
@@ -56,35 +19,24 @@ export async function ServicesFolio({
   intro,
   catalogTitle,
   catalogItems,
-  wrapTitle,
   wrapItems,
-  groupTitle,
-  groupIntro,
-  visaTitle,
   visaItems,
-  licenseTitle,
   licenseItems,
   contactLabel,
-  contactTitle,
-  contactBody,
 }: {
   label: string;
   identityTitle: string;
   intro: string;
   catalogTitle: string;
-  catalogItems: DeskItem[];
-  wrapTitle: string;
+  catalogItems: CatalogItem[];
   wrapItems: { title: string; body: string }[];
-  groupTitle: string;
-  groupIntro: string;
-  visaTitle: string;
-  visaItems: DeskItem[];
-  licenseTitle: string;
-  licenseItems: DeskItem[];
+  visaItems: GroupDeskItem[];
+  licenseItems: GroupDeskItem[];
   contactLabel: string;
-  contactTitle: string;
-  contactBody: string;
 }) {
+  const t = await getTranslations("servicesPage");
+  const wrapPoints = [t("wrapPoint1"), t("wrapPoint2"), t("wrapPoint3")];
+
   return (
     <main id="main">
       <ServicesIdentityHero
@@ -92,6 +44,7 @@ export async function ServicesFolio({
         title={identityTitle}
         intro={intro}
         contactLabel={contactLabel}
+        ctaHref="#service-inquiry"
         headingId="services-heading"
       />
 
@@ -126,14 +79,37 @@ export async function ServicesFolio({
       <section className="relative bg-background text-foreground" aria-labelledby="services-wrap-heading">
         <div className={cn("py-20 sm:py-28 lg:py-32", publicGutter)}>
           <div className="grid gap-12 lg:grid-cols-2 lg:items-start lg:gap-x-20 xl:gap-x-28">
-            <div>
+            <div className="lg:sticky lg:top-28">
+              <p className="inline-flex items-center gap-2 border border-secondary px-3 py-1 font-heading text-[0.7rem] font-medium tracking-[0.14em] text-secondary uppercase">
+                <span className="size-1.5 shrink-0 bg-secondary" aria-hidden />
+                {t("wrapBadge")}
+              </p>
               <h2
                 id="services-wrap-heading"
-                className="max-w-[12ch] font-heading text-[clamp(2.25rem,6vw,4.25rem)] font-semibold leading-[1.05] tracking-tight text-balance text-primary"
+                className="mt-5 max-w-[12ch] font-heading text-[clamp(2.15rem,5.5vw,3.75rem)] font-semibold leading-[1.05] tracking-tight text-balance text-primary sm:mt-6"
               >
-                {wrapTitle}
+                {t.rich("wrapHeadline", {
+                  mark: (chunks) => <span className="text-secondary">{chunks}</span>,
+                })}
               </h2>
-              <div className="mt-8 h-px w-28 bg-secondary sm:mt-10 sm:w-32" />
+              <div className="mt-5 h-px w-16 bg-secondary sm:mt-6 sm:w-20" />
+              <p className="mt-6 max-w-prose text-sm leading-relaxed text-pretty text-foreground/70 sm:text-base">
+                {t("wrapIntro")}
+              </p>
+              <ul className="mt-8 space-y-3">
+                {wrapPoints.map((point) => (
+                  <li key={point} className="flex items-start gap-3 text-sm leading-relaxed text-pretty sm:text-base">
+                    <Check className="mt-0.5 size-4 shrink-0 text-secondary" strokeWidth={2.25} aria-hidden />
+                    <span className="min-w-0 text-foreground/80">{point}</span>
+                  </li>
+                ))}
+              </ul>
+              <aside className="mt-8 bg-muted px-5 py-5 shadow-[2px_3px_12px_rgba(31,31,31,0.06)]">
+                <p className="font-heading text-[0.65rem] font-medium tracking-[0.14em] text-secondary uppercase">
+                  {t("inquiryNoteLabel")}
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-pretty text-foreground/75">{t("wrapNote")}</p>
+              </aside>
             </div>
             <ol className="list-none lg:mt-3 lg:border-s lg:border-secondary lg:ps-12 xl:ps-16">
               {wrapItems.map((item) => (
@@ -149,27 +125,7 @@ export async function ServicesFolio({
         </div>
       </section>
 
-      <section className="relative bg-muted text-foreground" aria-labelledby="services-group-heading">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-secondary" />
-        <div className={cn("py-16 sm:py-20", publicGutter)}>
-          <div className="max-w-2xl">
-            <h2
-              id="services-group-heading"
-              className="font-heading text-xl font-semibold tracking-tight text-balance sm:text-2xl"
-            >
-              {groupTitle}
-            </h2>
-            <div className="mt-5 h-px w-10 bg-secondary" />
-            <p className="mt-6 text-base leading-relaxed text-pretty text-foreground/70">{groupIntro}</p>
-          </div>
-          <div className="mt-12 grid gap-12 lg:grid-cols-2 lg:gap-x-16 xl:gap-x-24">
-            <DeskColumn headingId="services-visa-heading" title={visaTitle} items={visaItems} />
-            <DeskColumn headingId="services-license-heading" title={licenseTitle} items={licenseItems} />
-          </div>
-        </div>
-      </section>
-
-      <ContactCloser title={contactTitle} body={contactBody} />
+      <ServicesGroupInquiry visaItems={visaItems} licenseItems={licenseItems} />
     </main>
   );
 }

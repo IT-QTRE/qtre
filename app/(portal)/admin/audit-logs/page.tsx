@@ -19,6 +19,7 @@ const RESOURCE_LABEL: Record<Resource, string> = {
   agents: "Agents",
   communities: "Communities",
   leads: "Leads",
+  serviceLeads: "Service leads",
   propertySubmissions: "Submissions",
   blogPosts: "Blog",
   mediaItems: "Media",

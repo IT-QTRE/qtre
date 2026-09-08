@@ -157,6 +157,7 @@ describe("websiteSettings.upsert", () => {
     expect(settings?.socialLinks).toBeUndefined();
     expect(settings?.defaultSeo).toBeUndefined();
     expect(settings?.contactFormUrl).toBeUndefined();
+    expect(settings?.chatWidgetId).toBeUndefined();
     expect(settings?.contactWhatsapp).toBeUndefined();
   });
 
@@ -211,6 +212,44 @@ describe("websiteSettings.upsert", () => {
     await expect(
       asAdmin.mutation(api.websiteSettings.upsert, { siteName: "Qtre", contactWhatsapp: "123" }),
     ).rejects.toThrow("Enter a WhatsApp number or wa.me link");
+  });
+
+  test("stores a chat widget ID extracted from the loader script", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await asAdmin.mutation(api.websiteSettings.upsert, {
+      siteName: "Qtre",
+      chatWidgetId:
+        '<script src="https://widgets.leadconnectorhq.com/loader.js" data-widget-id="6a9fad037e179c4b66ba50e7"></script>',
+    });
+    const settings = await asAdmin.query(api.websiteSettings.get, {});
+    expect(settings?.chatWidgetId).toBe("6a9fad037e179c4b66ba50e7");
+    const publicSettings = await t.query(api.websiteSettings.publicGet, {});
+    expect(publicSettings?.chatWidgetId).toBe("6a9fad037e179c4b66ba50e7");
+  });
+
+  test("rejects a chat widget value that is not an ID", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedUser(t, "clerk|admin-1", "admin");
+    await expect(
+      asAdmin.mutation(api.websiteSettings.upsert, {
+        siteName: "Qtre",
+        chatWidgetId: "https://evil.example/loader.js",
+      }),
+    ).rejects.toThrow("Paste the chat widget ID or the loader script.");
+  });
+
+  test("publicGet omits a stored chat widget ID that is not valid", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("websiteSettings", {
+        siteName: "Qtre",
+        chatWidgetId: "https://evil.example/loader.js",
+        updatedAt: Date.now(),
+      });
+    });
+    const publicSettings = await t.query(api.websiteSettings.publicGet, {});
+    expect(publicSettings?.chatWidgetId).toBeUndefined();
   });
 });
 

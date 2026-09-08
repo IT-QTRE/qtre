@@ -12,6 +12,7 @@ import { compactSeoFields } from "@/lib/validation/shared";
 import { formSeo } from "@/lib/admin/form-values";
 import { websiteSettingsSchema } from "@/lib/validation/websiteSettings";
 import { safeGhlFormUrl } from "@/lib/ghl-form-url";
+import { safeGhlChatWidgetId } from "@/lib/ghl-chat-widget-id";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SeoFieldsSection } from "@/components/forms/seo-fields-section";
@@ -27,6 +28,7 @@ const websiteSettingsFormSchema = z.object({
   contactPhone: websiteSettingsSchema.shape.contactPhone,
   contactWhatsapp: websiteSettingsSchema.shape.contactWhatsapp,
   contactFormUrl: websiteSettingsSchema.shape.contactFormUrl,
+  chatWidgetId: websiteSettingsSchema.shape.chatWidgetId,
   socialLinks: websiteSettingsSchema.shape.socialLinks,
   seo: websiteSettingsSchema.shape.defaultSeo,
 });
@@ -38,6 +40,7 @@ const EMPTY_DEFAULTS: WebsiteSettingsFormValues = {
   contactPhone: "",
   contactWhatsapp: "",
   contactFormUrl: "",
+  chatWidgetId: "",
   socialLinks: { facebook: "", instagram: "", linkedin: "", twitter: "" },
   seo: formSeo(undefined),
 };
@@ -54,6 +57,7 @@ function toFormValues(settings: Doc<"websiteSettings">): WebsiteSettingsFormValu
     contactPhone: settings.contactPhone ?? "",
     contactWhatsapp: settings.contactWhatsapp ?? "",
     contactFormUrl: settings.contactFormUrl ?? "",
+    chatWidgetId: settings.chatWidgetId ?? settings.contactChatWidgetId ?? "",
     socialLinks: {
       facebook: settings.socialLinks?.facebook ?? "",
       instagram: settings.socialLinks?.instagram ?? "",
@@ -112,6 +116,7 @@ function WebsiteSettingsFormInner({ settings }: { settings: Doc<"websiteSettings
         contactPhone: emptyToUndef(values.contactPhone),
         contactWhatsapp: emptyToUndef(values.contactWhatsapp),
         contactFormUrl: safeGhlFormUrl(values.contactFormUrl) ?? emptyToUndef(values.contactFormUrl),
+        chatWidgetId: safeGhlChatWidgetId(values.chatWidgetId) ?? emptyToUndef(values.chatWidgetId),
         socialLinks: compactSocial(values.socialLinks),
         defaultSeo: compactSeoFields(values.seo),
       });
@@ -206,6 +211,25 @@ function WebsiteSettingsFormInner({ settings }: { settings: Doc<"websiteSettings
               </FieldHint>
               <FieldError message={form.formState.errors.contactFormUrl?.message} />
             </div>
+          </div>
+        </AdminSection>
+
+        <AdminSection title="Public chat" hint="One GoHighLevel bubble on every public page. Not admin, not portals.">
+          <div className="space-y-1">
+            <Label htmlFor="settings-chat-widget-id">Chat widget ID</Label>
+            <Input
+              id="settings-chat-widget-id"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="data-widget-id, or paste the loader script…"
+              {...form.register("chatWidgetId")}
+              aria-invalid={form.formState.errors.chatWidgetId ? true : undefined}
+            />
+            <FieldHint>
+              Optional — home, catalog, services, blog, Contact. Paste the widget ID or the whole GHL loader script. Empty hides the bubble. Conversations stay in GHL, not Leads.
+            </FieldHint>
+            <FieldError message={form.formState.errors.chatWidgetId?.message} />
           </div>
         </AdminSection>
 

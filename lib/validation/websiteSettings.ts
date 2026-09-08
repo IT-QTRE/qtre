@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { optionalEmailSchema, optionalUrlSchema, seoFieldsSchema } from "./shared";
 import { safeGhlFormUrl } from "../ghl-form-url";
+import { safeGhlChatWidgetId } from "../ghl-chat-widget-id";
 import { whatsappHref } from "../whatsapp-href";
 
 export const optionalGhlFormUrlSchema = z
@@ -21,6 +22,12 @@ export const websiteSettingsSchema = z.object({
       message: "Enter a WhatsApp number or wa.me link",
     }),
   contactFormUrl: optionalGhlFormUrlSchema,
+  chatWidgetId: z
+    .string()
+    .optional()
+    .refine((value) => !value || Boolean(safeGhlChatWidgetId(value)), {
+      message: "Paste the chat widget ID or the loader script (data-widget-id).",
+    }),
   socialLinks: z
     .object({
       facebook: optionalUrlSchema,

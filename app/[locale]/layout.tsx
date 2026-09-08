@@ -11,6 +11,7 @@ import { ConvexClientProvider } from "@/components/providers/convex-client-provi
 import { CatalogChromeProvider } from "@/components/public/catalog-chrome";
 import { SiteHeader } from "@/components/public/site-header";
 import { SiteFooter, SiteFooterFallback } from "@/components/public/site-footer";
+import { PublicGhlChatWidget } from "@/components/public/ghl-chat-widget";
 import { siteUrl } from "@/lib/site";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 
@@ -79,6 +80,9 @@ export default async function RootLayout({ children }: LayoutProps<"/[locale]">)
                 <div className="flex min-h-0 flex-1 flex-col">{children}</div>
                 <Suspense fallback={<SiteFooterFallback />}>
                   <SiteFooter />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <PublicGhlChatWidget />
                 </Suspense>
               </CatalogChromeProvider>
             </ConvexClientProvider>

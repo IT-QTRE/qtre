@@ -145,7 +145,7 @@ function ServicesNavMenu({
       <div className="flex flex-col gap-1">
         {wrap(
           <Link
-            href="/services"
+            href={{ pathname: "/services", hash: "services-heading" }}
             className={cn(
               "inline-flex min-h-11 items-center text-base",
               active ? "text-foreground" : "text-muted-foreground",
@@ -208,7 +208,9 @@ function ServicesNavMenu({
         className="min-w-44 rounded-xl p-2 duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
         sideOffset={8}
       >
-        <DropdownMenuItem render={<Link href="/services" />}>{tServices("overview")}</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={{ pathname: "/services", hash: "services-heading" }} />}>
+          {tServices("overview")}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {(["visa", "license"] as const).map((group) => (
           <DropdownMenuSub key={group}>

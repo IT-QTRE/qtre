@@ -19,6 +19,18 @@ describe("websiteSettingsSchema", () => {
     expect(
       websiteSettingsSchema.safeParse({
         siteName: "QuickTalk Real Estate",
+        chatWidgetId: "6a9fad037e179c4b66ba50e7",
+      }).success,
+    ).toBe(true);
+    expect(
+      websiteSettingsSchema.safeParse({
+        siteName: "QuickTalk Real Estate",
+        chatWidgetId: "https://evil.example/loader.js",
+      }).success,
+    ).toBe(false);
+    expect(
+      websiteSettingsSchema.safeParse({
+        siteName: "QuickTalk Real Estate",
         contactFormUrl: "https://evil.example/form",
       }).success,
     ).toBe(false);

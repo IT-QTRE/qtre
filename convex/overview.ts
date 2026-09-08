@@ -15,6 +15,7 @@ const CATALOG_ACTIVITY_RESOURCES = new Set([
   "properties",
   "projects",
   "leads",
+  "serviceLeads",
   "blogPosts",
   "developers",
   "agents",
@@ -152,6 +153,7 @@ const KIND_BY_RESOURCE: Record<string, string> = {
   properties: "Property",
   projects: "Project",
   leads: "Lead",
+  serviceLeads: "Service lead",
   blogPosts: "Post",
   developers: "Developer",
   agents: "Agent",
@@ -222,6 +224,10 @@ async function resolveAuditTitle(
   }
   if (resource === "leads") {
     const doc = await ctx.db.get(targetId as Id<"leads">);
+    return doc?.name ?? null;
+  }
+  if (resource === "serviceLeads") {
+    const doc = await ctx.db.get(targetId as Id<"serviceLeads">);
     return doc?.name ?? null;
   }
   if (resource === "users") {

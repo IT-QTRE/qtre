@@ -66,3 +66,20 @@ export function desksInGroup(group: ServiceGroup) {
 export function isServiceGroup(value: string): value is ServiceGroup {
   return value === "visa" || value === "license";
 }
+
+export function serviceDeskAdminLabel(group: string, slug: string) {
+  const desk = getServiceDesk(group, slug);
+  if (!desk) return `${group} / ${slug}`;
+  const labels: Record<ServiceDesk["nameKey"], string> = {
+    visaResidenceName: "Residence visa",
+    visaDependentName: "Dependent visa",
+    visaRemoteName: "Remote work visa",
+    visaGoldenName: "Golden Visa",
+    visaFreelanceName: "Freelance visa",
+    licenseRenewName: "License renewal",
+    licenseModifyName: "License modification",
+    licenseCancelName: "License cancellation",
+    licenseFreezeName: "License freezing",
+  };
+  return labels[desk.nameKey];
+}

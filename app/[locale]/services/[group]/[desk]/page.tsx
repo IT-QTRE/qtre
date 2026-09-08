@@ -459,13 +459,13 @@ export default async function ServiceDeskPage({
       covers={dossier?.covers}
       processTitle={dossier?.processTitle}
       process={dossier?.process}
-      applyLabel={dossier?.applyLabel}
-      contactLabel={tNav("contact")}
       breadcrumbLabel={tCatalog("breadcrumb")}
       homeLabel={tNav("home")}
       parentLabel={tNav("services")}
       siblingsTitle={desk.group === "visa" ? tServices("visaTitle") : tServices("licenseTitle")}
       siblings={siblings}
+      inquiryGroup={desk.group}
+      inquiryDesk={desk.slug}
     />
   );
 }

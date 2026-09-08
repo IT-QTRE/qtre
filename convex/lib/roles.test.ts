@@ -30,6 +30,11 @@ describe("PERMISSION_MATRIX", () => {
     expect(PERMISSION_MATRIX.agent.properties).toEqual(["read", "update"]);
     expect(PERMISSION_MATRIX.agent.leads).toEqual(["read", "update"]);
   });
+
+  it("keeps visa/license inquiries off the agent and client portals", () => {
+    expect(PERMISSION_MATRIX.agent.serviceLeads).toEqual([]);
+    expect(PERMISSION_MATRIX.client.serviceLeads).toEqual([]);
+  });
 });
 
 describe("can", () => {

@@ -30,7 +30,11 @@ export function AdminNav({
   const pathname = usePathname();
   const groups = getVisibleNavGroups(userRole, disabledResources);
   const showLeads = groups.some((group) => group.items.some((item) => item.href === "/admin/leads"));
+  const showServiceLeads = groups.some((group) =>
+    group.items.some((item) => item.href === "/admin/service-leads"),
+  );
   const newLeadCount = useAuthedQuery(api.leads.newCount, showLeads ? {} : "skip");
+  const newServiceLeadCount = useAuthedQuery(api.serviceLeads.newCount, showServiceLeads ? {} : "skip");
 
   return (
     <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-4">
@@ -43,7 +47,12 @@ export function AdminNav({
             {group.items.map((item) => {
               const active = isAdminNavActive(item.href, pathname);
               const Icon = item.icon as ComponentType<{ className?: string }>;
-              const leadCount = item.href === "/admin/leads" && newLeadCount ? newLeadCount : 0;
+              const leadCount =
+                item.href === "/admin/leads"
+                  ? (newLeadCount ?? 0)
+                  : item.href === "/admin/service-leads"
+                    ? (newServiceLeadCount ?? 0)
+                    : 0;
               const link = (
                 <Link
                   href={item.href}
