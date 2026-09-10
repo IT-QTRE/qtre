@@ -9,12 +9,11 @@ type CreateMediaItem = (args: {
   url: string;
   pathname: string;
   mimeType: string;
-  order: number;
 }) => Promise<unknown>;
 
-// Uploads can finish in any order; `mediaItems.create` used to stamp
-// `order` from whichever mutation landed first, which shuffled cover on
-// create. Blob uploads stay parallel; rows are written in picker order.
+// Uploads can finish in any order; `mediaItems.create` stamps `order` from
+// whichever row is written first. Blob uploads stay parallel; rows are
+// written in picker order so cover stays the first thumbnail.
 export async function attachPendingMedia(
   pending: PendingUpload[],
   entityType: MediaEntityType,
@@ -22,16 +21,16 @@ export async function attachPendingMedia(
   createItem: CreateMediaItem,
 ): Promise<number> {
   const results = await Promise.allSettled(
-    pending.map(async (item, index) => {
+    pending.map(async (item) => {
       const uploaded = await uploadMediaFile(item.file, entityType, entityId);
-      return { item, uploaded, index };
+      return { item, uploaded };
     }),
   );
 
   for (const result of results) {
     if (result.status !== "fulfilled") continue;
-    const { item, uploaded, index } = result.value;
-    await createItem({ entityType, entityId, ...uploaded, order: index });
+    const { item, uploaded } = result.value;
+    await createItem({ entityType, entityId, ...uploaded });
     URL.revokeObjectURL(item.previewUrl);
   }
 

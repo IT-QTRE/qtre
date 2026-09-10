@@ -38,8 +38,6 @@ describe("compactSeoFields", () => {
     expect(compactSeoFields({ seoTitle: { en: "" }, seoDescription: { en: "" }, canonicalPath: "" })).toBeUndefined();
     expect(compactSeoFields({ seoTitle: { en: "  Marina Heights  " } })).toEqual({
       seoTitle: { en: "Marina Heights" },
-      seoDescription: undefined,
-      canonicalPath: undefined,
     });
   });
 });

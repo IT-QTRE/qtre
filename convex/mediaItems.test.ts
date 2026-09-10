@@ -64,34 +64,36 @@ describe("mediaItems.create + listByEntity", () => {
     expect(items[1].order).toBe(1);
   });
 
-  test("honors an explicit order so parallel create-page uploads keep the picker sequence", async () => {
+  test("lists photos by order even when rows were inserted out of sequence", async () => {
     const t = convexTest(schema, modules);
     const asAdmin = await seedAdmin(t);
     const prefix = requiredPathnamePrefix("property", "prop-order");
 
-    await asAdmin.mutation(api.mediaItems.create, {
-      entityType: "property",
-      entityId: "prop-order",
-      url: "https://example.public.blob.vercel-storage.com/kitchen.webp",
-      pathname: `${prefix}kitchen.webp`,
-      mimeType: "image/webp",
-      order: 2,
-    });
-    await asAdmin.mutation(api.mediaItems.create, {
-      entityType: "property",
-      entityId: "prop-order",
-      url: "https://example.public.blob.vercel-storage.com/cover.webp",
-      pathname: `${prefix}cover.webp`,
-      mimeType: "image/webp",
-      order: 0,
-    });
-    await asAdmin.mutation(api.mediaItems.create, {
-      entityType: "property",
-      entityId: "prop-order",
-      url: "https://example.public.blob.vercel-storage.com/living.webp",
-      pathname: `${prefix}living.webp`,
-      mimeType: "image/webp",
-      order: 1,
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaItems", {
+        entityType: "property",
+        entityId: "prop-order",
+        url: "https://example.public.blob.vercel-storage.com/kitchen.webp",
+        pathname: `${prefix}kitchen.webp`,
+        mimeType: "image/webp",
+        order: 2,
+      });
+      await ctx.db.insert("mediaItems", {
+        entityType: "property",
+        entityId: "prop-order",
+        url: "https://example.public.blob.vercel-storage.com/cover.webp",
+        pathname: `${prefix}cover.webp`,
+        mimeType: "image/webp",
+        order: 0,
+      });
+      await ctx.db.insert("mediaItems", {
+        entityType: "property",
+        entityId: "prop-order",
+        url: "https://example.public.blob.vercel-storage.com/living.webp",
+        pathname: `${prefix}living.webp`,
+        mimeType: "image/webp",
+        order: 1,
+      });
     });
 
     const items = await asAdmin.query(api.mediaItems.listByEntity, {

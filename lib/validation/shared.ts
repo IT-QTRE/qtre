@@ -87,7 +87,11 @@ export function compactSeoFields(seo: SeoFieldsInput | undefined) {
   const seoDescription = compactLocalized(seo.seoDescription);
   const canonicalPath = seo.canonicalPath?.trim() ? seo.canonicalPath.trim() : undefined;
   if (!seoTitle && !seoDescription && !canonicalPath) return undefined;
-  return { seoTitle, seoDescription, canonicalPath };
+  return {
+    ...(seoTitle ? { seoTitle } : {}),
+    ...(seoDescription ? { seoDescription } : {}),
+    ...(canonicalPath ? { canonicalPath } : {}),
+  };
 }
 
 export const paymentMilestoneSchema = z.object({
