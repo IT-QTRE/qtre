@@ -13,7 +13,8 @@ import { catalogSearchHref } from "@/lib/seo/catalog";
 import { siteUrl } from "@/lib/site";
 import { PublicListingMap } from "@/components/maps/public-listing-map";
 import { ListingAmenities } from "@/components/public/listing-amenities";
-import { ListingCard, ListingRail } from "@/components/public/listing-card";
+import { listingCardViewFrom, ListingRail } from "@/components/public/listing-card";
+import { ListingCardView } from "@/components/public/listing-card-view";
 import { ListingFolio } from "@/components/public/listing-folio";
 import { ListingGallery } from "@/components/public/listing-gallery";
 import { ListingIdentity } from "@/components/public/listing-identity";
@@ -162,21 +163,25 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
             </h2>
             <ListingRail label={t("suggestedHeading")}>
               {suggested.map((listing) => (
-                <ListingCard
+                <ListingCardView
                   key={listing._id}
-                  listing={{
-                    href: `/properties/${listing.slug}`,
-                    title: listing.title,
-                    location: listing.communityName ?? listing.city,
-                    price: listing.price,
-                    bedrooms: listing.bedrooms,
-                    bathrooms: listing.bathrooms,
-                    areaSqft: listing.areaSqft,
-                    listingStatus: listing.listingStatus,
-                    imageUrl: listing.imageUrl,
-                    imageAlt: listing.imageAlt,
-                    description: listing.description,
-                  }}
+                  listing={listingCardViewFrom(
+                    {
+                      href: `/properties/${listing.slug}`,
+                      title: listing.title,
+                      location: listing.communityName ?? listing.city,
+                      price: listing.price,
+                      bedrooms: listing.bedrooms,
+                      bathrooms: listing.bathrooms,
+                      areaSqft: listing.areaSqft,
+                      listingStatus: listing.listingStatus,
+                      imageUrl: listing.imageUrl,
+                      imageAlt: listing.imageAlt,
+                      description: listing.description,
+                    },
+                    locale,
+                    t,
+                  )}
                 />
               ))}
             </ListingRail>
