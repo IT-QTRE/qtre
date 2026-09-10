@@ -67,7 +67,14 @@ function LocaleInput({
             {richText ? (
               <RichTextEditor dir={dir} value={field.value ?? ""} onChange={field.onChange} excludePostId={excludePostId} />
             ) : multiline ? (
-              <Textarea dir={dir} rows={5} placeholder={placeholder} {...field} value={field.value ?? ""} />
+              <Textarea
+                dir={dir}
+                rows={5}
+                placeholder={placeholder}
+                className="max-h-64 overflow-y-auto overscroll-y-contain"
+                {...field}
+                value={field.value ?? ""}
+              />
             ) : (
               <Input dir={dir} placeholder={placeholder} {...field} value={field.value ?? ""} />
             )}
