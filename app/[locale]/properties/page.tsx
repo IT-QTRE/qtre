@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import type { ReactElement } from "react";
 import { fetchPublicQuery } from "@/lib/convex/fetch-public-query";
 import { getLocale, getTranslations } from "next-intl/server";
 import { api } from "@/convex/_generated/api";
 import { Link } from "@/i18n/navigation";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { CatalogEmpty } from "@/components/public/catalog-empty";
+import { CatalogEmpty, CatalogEmptyLink } from "@/components/public/catalog-empty";
 import { CatalogPagination } from "@/components/public/catalog-pagination";
 import { CATALOG_PAGE_SIZE, parseCatalogPage } from "@/lib/catalog-page";
 import { CatalogResults } from "@/components/public/catalog-results";
@@ -94,14 +95,20 @@ export default async function PropertiesPage({
   const intent = catalogIntentFromStatus(search.status);
   const filters = catalogFiltersFromSearch(search);
   const listingStatus = catalogListingStatus(intent);
+  const otherIntent = intent === "rent" ? "sale" : "rent";
   const requestedPage = parseCatalogPage(search.page);
   const cookieStorePromise = cookies();
-  const [listingPage, settings, localeRaw, t, tNav, cookieStore] = await Promise.all([
+  const [listingPage, otherStock, settings, localeRaw, t, tNav, cookieStore] = await Promise.all([
     fetchPublicQuery(api.publicCatalog.listPublishedPropertiesPage, {
       listingStatus,
       page: requestedPage,
       pageSize: CATALOG_PAGE_SIZE,
       ...catalogQueryArgs(filters),
+    }),
+    fetchPublicQuery(api.publicCatalog.listPublishedPropertiesPage, {
+      listingStatus: catalogListingStatus(otherIntent),
+      page: 1,
+      pageSize: 1,
     }),
     fetchPublicQuery(api.websiteSettings.publicGet, {}),
     getLocale(),
@@ -140,6 +147,24 @@ export default async function PropertiesPage({
     : queryOnly
       ? t(isRent ? "emptyRentQuery" : "emptyBuyQuery", { query: filters.q ?? "" })
       : t(isRent ? "emptyRentFiltered" : "emptyBuyFiltered");
+  const otherHasStock = otherStock.total > 0;
+  const emptyActions = [
+    hasFilters ? (
+      <CatalogEmptyLink key="clear" href={canonicalPath}>
+        {t(isRent ? "clearRentSearch" : "clearBuySearch")}
+      </CatalogEmptyLink>
+    ) : null,
+    otherHasStock ? (
+      <CatalogEmptyLink key="other" href={catalogSearchHref(otherIntent)}>
+        {isRent ? t("emptySeeBuy") : t("emptySeeRent")}
+      </CatalogEmptyLink>
+    ) : null,
+    !hasFilters ? (
+      <CatalogEmptyLink key="contact" href="/contact">
+        {t("speakAdvisor")}
+      </CatalogEmptyLink>
+    ) : null,
+  ].filter((node): node is ReactElement => node != null);
   const rangeFrom = listingPage.total === 0 ? 0 : (listingPage.page - 1) * listingPage.pageSize + 1;
   const rangeTo = Math.min(listingPage.total, listingPage.page * listingPage.pageSize);
 
@@ -224,17 +249,16 @@ export default async function PropertiesPage({
       {properties.length === 0 ? (
         <div className={cn("max-w-prose py-10", publicGutter)}>
           <CatalogEmpty>{emptyMessage}</CatalogEmpty>
-          <p className="mt-4 text-sm">
-            {hasFilters ? (
-              <Link href={canonicalPath} className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                {t(isRent ? "clearRentSearch" : "clearBuySearch")}
-              </Link>
-            ) : (
-              <Link href="/contact" className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                {t("speakAdvisor")}
-              </Link>
-            )}
-          </p>
+          {emptyActions.length > 0 ? (
+            <p className="mt-4 text-sm">
+              {emptyActions.map((action, index) => (
+                <span key={action.key}>
+                  {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
+                  {action}
+                </span>
+              ))}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className={cn("py-10", publicGutter)}>

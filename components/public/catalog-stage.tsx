@@ -26,6 +26,7 @@ export function CatalogStage({
   labels,
   panels,
   intents = INTENTS,
+  initialIntent,
   markId = "catalog-stage-intent",
 }: {
   heading: string;
@@ -35,11 +36,14 @@ export function CatalogStage({
   labels: Record<SearchIntent, string>;
   panels: Partial<Record<SearchIntent, ReactNode>>;
   intents?: readonly SearchIntent[];
+  initialIntent?: SearchIntent;
   markId?: string;
 }) {
   const reduced = useReducedMotion() ?? false;
   const tabs = intents.length > 0 ? intents : INTENTS;
-  const [intent, setIntent] = useState<SearchIntent>(tabs[0] ?? "buy");
+  const [intent, setIntent] = useState<SearchIntent>(
+    initialIntent && tabs.includes(initialIntent) ? initialIntent : (tabs[0] ?? "buy"),
+  );
 
   function selectIntent(value: SearchIntent) {
     setIntent(value);

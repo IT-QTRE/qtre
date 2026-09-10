@@ -5,6 +5,7 @@ import { HeroMedia } from "@/components/public/hero-media";
 import { HomeSearch } from "@/components/public/home-search";
 import { ListingCard, ListingRail } from "@/components/public/listing-card";
 import { CatalogStage } from "@/components/public/catalog-stage";
+import { CatalogEmptyLink } from "@/components/public/catalog-empty";
 import { CommunityShowcase } from "@/components/public/community-showcase";
 import { groupFeaturedCommunities, marketLabelKey } from "@/lib/home-community-markets";
 import { DeveloperRoster, type DeveloperRow } from "@/components/public/developer-roster";
@@ -16,6 +17,8 @@ import { ContactCloser } from "@/components/public/contact-closer";
 import { SellWithUs } from "@/components/public/sell-with-us";
 import { GoldRule } from "@/components/public/gold-rule";
 import type { AppLocale } from "@/i18n/routing";
+import type { SearchIntent } from "@/lib/public-nav";
+import { catalogSearchHref } from "@/lib/seo/catalog";
 
 function communityMarkets(
   communities: {
@@ -52,10 +55,42 @@ function developerRows(
   }));
 }
 
+function featuredIntent(forSale: number, forRent: number, projects: number): SearchIntent {
+  if (forSale > 0) return "buy";
+  if (forRent > 0) return "rent";
+  if (projects > 0) return "offplan";
+  return "buy";
+}
+
+function FeaturedEmpty({
+  message,
+  actions,
+}: {
+  message: string;
+  actions: { href: string; label: string }[];
+}) {
+  return (
+    <div className="mt-10 max-w-prose">
+      <p className="text-sm leading-relaxed text-foreground/80">{message}</p>
+      {actions.length > 0 ? (
+        <p className="mt-4 text-sm">
+          {actions.map((action, index) => (
+            <span key={action.href}>
+              {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
+              <CatalogEmptyLink href={action.href}>{action.label}</CatalogEmptyLink>
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function HomePage() {
   const t = await getTranslations("home");
   const tBrand = await getTranslations("brand");
   const tSection = await getTranslations("section");
+  const tCatalog = await getTranslations("catalog");
   const locale = (await getLocale()) as AppLocale;
   const [forSale, forRent, projects, communities, developers, posts, settings] = await Promise.all([
     fetchPublicQuery(api.publicCatalog.listPublishedProperties, { listingStatus: "for_sale" }),
@@ -71,6 +106,21 @@ export default async function HomePage() {
     return key ? t(key) : code;
   });
   const roster = developerRows(developers, locale);
+  const buyEmptyActions = [
+    ...(forRent.length > 0 ? [{ href: catalogSearchHref("rent"), label: tCatalog("emptySeeRent") }] : []),
+    ...(projects.length > 0 ? [{ href: "/projects", label: tCatalog("emptySeeOffplan") }] : []),
+    { href: "/contact", label: tCatalog("speakAdvisor") },
+  ];
+  const rentEmptyActions = [
+    ...(forSale.length > 0 ? [{ href: catalogSearchHref("sale"), label: tCatalog("emptySeeBuy") }] : []),
+    ...(projects.length > 0 ? [{ href: "/projects", label: tCatalog("emptySeeOffplan") }] : []),
+    { href: "/contact", label: tCatalog("speakAdvisor") },
+  ];
+  const offplanEmptyActions = [
+    ...(forRent.length > 0 ? [{ href: catalogSearchHref("rent"), label: tCatalog("emptySeeRent") }] : []),
+    ...(forSale.length > 0 ? [{ href: catalogSearchHref("sale"), label: tCatalog("emptySeeBuy") }] : []),
+    { href: "/contact", label: tCatalog("speakAdvisor") },
+  ];
 
   return (
     <main id="main">
@@ -104,11 +154,12 @@ export default async function HomePage() {
         heading={t("inventoryTitle")}
         seeAllLabel={t("seeAll")}
         intentGroupLabel={t("intentGroup")}
+        initialIntent={featuredIntent(forSale.length, forRent.length, projects.length)}
         labels={{ buy: t("buy"), rent: t("rent"), offplan: t("offplan") }}
         panels={{
           buy:
             forSale.length === 0 ? (
-              <p className="mt-10 max-w-prose text-sm leading-relaxed text-foreground/80">{t("emptyListings")}</p>
+              <FeaturedEmpty message={tCatalog("emptyBuy")} actions={buyEmptyActions} />
             ) : (
               <ListingRail label={t("buy")}>
                 {forSale.slice(0, 3).map((listing) => (
@@ -133,7 +184,7 @@ export default async function HomePage() {
             ),
           rent:
             forRent.length === 0 ? (
-              <p className="mt-10 max-w-prose text-sm leading-relaxed text-foreground/80">{t("emptyListings")}</p>
+              <FeaturedEmpty message={tCatalog("emptyRent")} actions={rentEmptyActions} />
             ) : (
               <ListingRail label={t("rent")}>
                 {forRent.slice(0, 3).map((listing) => (
@@ -158,7 +209,7 @@ export default async function HomePage() {
             ),
           offplan:
             projects.length === 0 ? (
-              <p className="mt-10 max-w-prose text-sm leading-relaxed text-foreground/80">{t("emptyProjects")}</p>
+              <FeaturedEmpty message={t("emptyProjects")} actions={offplanEmptyActions} />
             ) : (
               <ListingRail label={t("offplan")}>
                 {projects.slice(0, 3).map((listing) => (
