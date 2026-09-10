@@ -240,6 +240,8 @@
     "relatedCommunity": "المجتمع",
     "relatedDeveloper": "المطور",
     "agentHeading": "المستشار",
+    "suggestedHeading": "عقارات أخرى",
+    "suggestedHeadingIn": "المزيد في {place}",
     "profileWebsite": "الموقع",
     "listingsHeading": "العقارات",
     "developerProfileFallback": "مطوّر منشور.",

@@ -240,6 +240,8 @@
     "relatedCommunity": "Community",
     "relatedDeveloper": "Developer",
     "agentHeading": "Advisor",
+    "suggestedHeading": "Other listings",
+    "suggestedHeadingIn": "More in {place}",
     "profileWebsite": "Website",
     "listingsHeading": "Listings",
     "developerProfileFallback": "Published developer.",

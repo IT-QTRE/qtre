@@ -240,6 +240,8 @@
     "relatedCommunity": "Bölge",
     "relatedDeveloper": "Geliştirici",
     "agentHeading": "Danışman",
+    "suggestedHeading": "Diğer ilanlar",
+    "suggestedHeadingIn": "{place} içinde daha fazla",
     "profileWebsite": "Web sitesi",
     "listingsHeading": "İlanlar",
     "developerProfileFallback": "Yayınlanmış geliştirici.",

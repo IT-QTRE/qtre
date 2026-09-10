@@ -9,6 +9,7 @@ export function ListingFolio({
   specs,
   inquire,
   children,
+  after,
 }: {
   breadcrumb: ReactNode;
   gallery: ReactNode;
@@ -16,6 +17,7 @@ export function ListingFolio({
   specs?: ReactNode;
   inquire: ReactNode;
   children: ReactNode;
+  after?: ReactNode;
 }) {
   return (
     <main id="main" className="w-full">
@@ -30,6 +32,7 @@ export function ListingFolio({
           </div>
           <aside className="mt-12 lg:mt-0 lg:sticky lg:top-28">{inquire}</aside>
         </div>
+        {after ? <div className="mt-16 lg:mt-24">{after}</div> : null}
       </div>
     </main>
   );

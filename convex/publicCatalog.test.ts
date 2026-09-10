@@ -298,6 +298,113 @@ describe("publicCatalog.getPublishedPropertyBySlug", () => {
   });
 });
 
+describe("publicCatalog.listSuggestedProperties", () => {
+  test("returns empty for a missing or draft slug", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedAdmin(t);
+    await asAdmin.mutation(api.properties.create, { ...propertyArgs, status: "draft" });
+
+    expect(await t.query(api.publicCatalog.listSuggestedProperties, { slug: "missing" })).toEqual([]);
+    expect(await t.query(api.publicCatalog.listSuggestedProperties, { slug: "marina-unit-101" })).toEqual([]);
+  });
+
+  test("prefers the same community, skips self, drafts, and the other intent", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedAdmin(t);
+    const marina = await asAdmin.mutation(api.communities.create, {
+      name: { en: "Dubai Marina" },
+      city: { en: "Dubai" },
+      countryCode: "AE",
+      slug: "dubai-marina",
+      status: "published",
+    });
+    const bay = await asAdmin.mutation(api.communities.create, {
+      name: { en: "Business Bay" },
+      city: { en: "Dubai" },
+      countryCode: "AE",
+      slug: "business-bay",
+      status: "published",
+    });
+    await asAdmin.mutation(api.properties.create, { ...propertyArgs, communityId: marina });
+    await asAdmin.mutation(api.properties.create, {
+      ...propertyArgs,
+      slug: "marina-unit-202",
+      title: { en: "Marina Unit 202" },
+      price: 2_200_000,
+      communityId: marina,
+    });
+    await asAdmin.mutation(api.properties.create, {
+      ...propertyArgs,
+      slug: "marina-draft",
+      title: { en: "Marina Draft" },
+      status: "draft",
+      communityId: marina,
+    });
+    await asAdmin.mutation(api.properties.create, {
+      ...propertyArgs,
+      slug: "marina-rent",
+      title: { en: "Marina Rent" },
+      listingStatus: "for_rent",
+      communityId: marina,
+    });
+    await asAdmin.mutation(api.properties.create, {
+      ...propertyArgs,
+      slug: "bay-sale",
+      title: { en: "Bay Sale" },
+      communityId: bay,
+    });
+
+    const suggested = await t.query(api.publicCatalog.listSuggestedProperties, { slug: "marina-unit-101" });
+    expect(suggested.map((row) => row.slug)).toEqual(["marina-unit-202", "bay-sale"]);
+  });
+
+  test("fills from the same city when the community has no other published stock", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedAdmin(t);
+    const marina = await asAdmin.mutation(api.communities.create, {
+      name: { en: "Dubai Marina" },
+      city: { en: "Dubai" },
+      countryCode: "AE",
+      slug: "dubai-marina",
+      status: "published",
+    });
+    await asAdmin.mutation(api.properties.create, { ...propertyArgs, communityId: marina });
+    await asAdmin.mutation(api.properties.create, {
+      ...propertyArgs,
+      slug: "downtown-sale",
+      title: { en: "Downtown Sale" },
+      city: { en: "Dubai" },
+    });
+    await asAdmin.mutation(api.properties.create, {
+      ...propertyArgs,
+      slug: "istanbul-sale",
+      title: { en: "Istanbul Sale" },
+      city: { en: "Istanbul" },
+      countryCode: "TR",
+    });
+
+    const suggested = await t.query(api.publicCatalog.listSuggestedProperties, { slug: "marina-unit-101" });
+    expect(suggested.map((row) => row.slug)).toEqual(["downtown-sale"]);
+  });
+
+  test("caps at three listings", async () => {
+    const t = convexTest(schema, modules);
+    const asAdmin = await seedAdmin(t);
+    await asAdmin.mutation(api.properties.create, propertyArgs);
+    for (let i = 0; i < 4; i += 1) {
+      await asAdmin.mutation(api.properties.create, {
+        ...propertyArgs,
+        slug: `other-${i}`,
+        title: { en: `Other ${i}` },
+      });
+    }
+
+    const suggested = await t.query(api.publicCatalog.listSuggestedProperties, { slug: "marina-unit-101" });
+    expect(suggested).toHaveLength(3);
+    expect(suggested.map((row) => row.slug).includes("marina-unit-101")).toBe(false);
+  });
+});
+
 describe("publicCatalog.getPublishedProjectBySlug", () => {
   test("returns null for a draft slug", async () => {
     const t = convexTest(schema, modules);

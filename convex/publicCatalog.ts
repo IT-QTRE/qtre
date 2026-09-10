@@ -398,6 +398,92 @@ async function publishedByListingStatus(ctx: QueryCtx, listingStatus: "for_sale"
     .take(take);
 }
 
+const SUGGESTED_PROPERTIES_LIMIT = 3;
+const SUGGESTED_SCAN_LIMIT = 200;
+
+function isActiveListingStatus(
+  listingStatus: Doc<"properties">["listingStatus"],
+): listingStatus is "for_sale" | "for_rent" {
+  return listingStatus === "for_sale" || listingStatus === "for_rent";
+}
+
+function sameCity(a: Doc<"properties">["city"], b: Doc<"properties">["city"]) {
+  return a.en.trim().toLowerCase() === b.en.trim().toLowerCase();
+}
+
+function suggestionScore(source: Doc<"properties">, candidate: Doc<"properties">) {
+  let score = 0;
+  if (source.communityId && candidate.communityId === source.communityId) score += 8;
+  if (source.projectId && candidate.projectId === source.projectId) score += 4;
+  if (sameCity(source.city, candidate.city)) score += 2;
+  if (candidate.bedrooms === source.bedrooms) score += 1;
+  return score;
+}
+
+function compareSuggested(source: Doc<"properties">, a: Doc<"properties">, b: Doc<"properties">) {
+  const byScore = suggestionScore(source, b) - suggestionScore(source, a);
+  if (byScore !== 0) return byScore;
+  const byPrice = Math.abs(a.price - source.price) - Math.abs(b.price - source.price);
+  if (byPrice !== 0) return byPrice;
+  return (b.publishing.publishedAt ?? b._creationTime) - (a.publishing.publishedAt ?? a._creationTime);
+}
+
+function takeSuggested(
+  source: Doc<"properties">,
+  rows: Doc<"properties">[],
+  picked: Doc<"properties">[],
+  seen: Set<Id<"properties">>,
+) {
+  const eligible = rows
+    .filter(
+      (row) =>
+        row.publishing.status === "published" &&
+        row.listingStatus === source.listingStatus &&
+        !seen.has(row._id),
+    )
+    .sort((a, b) => compareSuggested(source, a, b));
+  for (const row of eligible) {
+    if (picked.length >= SUGGESTED_PROPERTIES_LIMIT) break;
+    seen.add(row._id);
+    picked.push(row);
+  }
+}
+
+async function suggestedPropertiesFor(ctx: QueryCtx, property: Doc<"properties">) {
+  if (!isActiveListingStatus(property.listingStatus)) return [];
+
+  const picked: Doc<"properties">[] = [];
+  const seen = new Set<Id<"properties">>([property._id]);
+
+  const communityId = property.communityId;
+  if (communityId) {
+    const linked = await ctx.db
+      .query("properties")
+      .withIndex("by_community", (q) => q.eq("communityId", communityId))
+      .take(LINKED_UNITS_LIMIT);
+    takeSuggested(property, linked, picked, seen);
+  }
+  const projectId = property.projectId;
+  if (picked.length < SUGGESTED_PROPERTIES_LIMIT && projectId) {
+    const linked = await ctx.db
+      .query("properties")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(LINKED_UNITS_LIMIT);
+    takeSuggested(property, linked, picked, seen);
+  }
+  if (picked.length < SUGGESTED_PROPERTIES_LIMIT) {
+    const published = await publishedByListingStatus(ctx, property.listingStatus, SUGGESTED_SCAN_LIMIT);
+    takeSuggested(
+      property,
+      published.filter((row) => sameCity(row.city, property.city)),
+      picked,
+      seen,
+    );
+  }
+
+  return await Promise.all(picked.map((row) => toPropertyCard(ctx, row)));
+}
+
 const FEATURED_LIMIT = 6;
 
 export const featuredProperties = query({
@@ -1084,6 +1170,19 @@ export const getPublishedPropertyBySlug = query({
       furnishing: property.furnishing ?? null,
       rentalPeriod: property.listingStatus === "for_rent" ? (property.rentalPeriod ?? null) : null,
     };
+  },
+});
+
+export const listSuggestedProperties = query({
+  args: { slug: v.string() },
+  returns: v.array(propertyCardValidator),
+  handler: async (ctx, args) => {
+    const property = await ctx.db
+      .query("properties")
+      .withIndex("by_publishing_slug", (q) => q.eq("publishing.slug", args.slug))
+      .unique();
+    if (!property || property.publishing.status !== "published") return [];
+    return await suggestedPropertiesFor(ctx, property);
   },
 });
 

@@ -13,6 +13,7 @@ import { catalogSearchHref } from "@/lib/seo/catalog";
 import { siteUrl } from "@/lib/site";
 import { PublicListingMap } from "@/components/maps/public-listing-map";
 import { ListingAmenities } from "@/components/public/listing-amenities";
+import { ListingCard, ListingRail } from "@/components/public/listing-card";
 import { ListingFolio } from "@/components/public/listing-folio";
 import { ListingGallery } from "@/components/public/listing-gallery";
 import { ListingIdentity } from "@/components/public/listing-identity";
@@ -53,12 +54,13 @@ export async function generateMetadata({
 
 export default async function PropertyDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [localeRaw, t, tNav, property, settings] = await Promise.all([
+  const [localeRaw, t, tNav, property, settings, suggested] = await Promise.all([
     getLocale(),
     getTranslations("catalog"),
     getTranslations("nav"),
     fetchPublicQuery(api.publicCatalog.getPublishedPropertyBySlug, { slug }),
     fetchPublicQuery(api.websiteSettings.publicGet, {}),
+    fetchPublicQuery(api.publicCatalog.listSuggestedProperties, { slug }),
   ]);
   const locale = localeRaw as AppLocale;
   if (!property) notFound();
@@ -147,6 +149,40 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       }
       specs={<ListingKeyFacts rows={specRows} extras={extraFacts} />}
       inquire={inquire}
+      after={
+        suggested.length > 0 ? (
+          <section aria-labelledby="suggested-listings-heading">
+            <h2
+              id="suggested-listings-heading"
+              className="font-heading text-lg font-semibold tracking-tight text-pretty"
+            >
+              {property.communityName
+                ? t("suggestedHeadingIn", { place: pickLocalized(property.communityName, locale) })
+                : t("suggestedHeading")}
+            </h2>
+            <ListingRail label={t("suggestedHeading")}>
+              {suggested.map((listing) => (
+                <ListingCard
+                  key={listing._id}
+                  listing={{
+                    href: `/properties/${listing.slug}`,
+                    title: listing.title,
+                    location: listing.communityName ?? listing.city,
+                    price: listing.price,
+                    bedrooms: listing.bedrooms,
+                    bathrooms: listing.bathrooms,
+                    areaSqft: listing.areaSqft,
+                    listingStatus: listing.listingStatus,
+                    imageUrl: listing.imageUrl,
+                    imageAlt: listing.imageAlt,
+                    description: listing.description,
+                  }}
+                />
+              ))}
+            </ListingRail>
+          </section>
+        ) : undefined
+      }
     >
       {description.trim() ? (
         <ListingSection title={t("listingAbout")}>
