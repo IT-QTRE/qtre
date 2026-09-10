@@ -13,7 +13,7 @@ import { projectSchema } from "@/lib/validation/projects";
 import { compactSeoFields, publishingFieldsSchema } from "@/lib/validation/shared";
 import { CURATED_AMENITIES } from "@/lib/constants/amenities";
 import type { PaymentPlanMilestone } from "@/lib/constants/payment-plans";
-import { uploadMediaFile } from "@/lib/media/uploadMediaFile";
+import { attachPendingMedia } from "@/lib/media/attachPendingMedia";
 import { slugFromTitle } from "@/lib/format/slug";
 import { digitsOnly } from "@/lib/format/grouped-number";
 import { sqftToSqm } from "@/lib/format/area";
@@ -394,14 +394,7 @@ function ProjectFormFields(props: ProjectFormProps) {
       } else {
         const id = await createProject(payload);
         if (pendingPhotos.length > 0) {
-          const results = await Promise.allSettled(
-            pendingPhotos.map(async (pending) => {
-              const uploaded = await uploadMediaFile(pending.file, "project", id);
-              await createMediaItem({ entityType: "project", entityId: id, ...uploaded });
-              URL.revokeObjectURL(pending.previewUrl);
-            }),
-          );
-          const failedCount = results.filter((result) => result.status === "rejected").length;
+          const failedCount = await attachPendingMedia(pendingPhotos, "project", id, createMediaItem);
           if (failedCount > 0) {
             toast.warning(`Project created, but ${failedCount} photo(s) failed to upload — add them from the edit page.`);
           } else {

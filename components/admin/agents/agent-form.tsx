@@ -12,7 +12,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { agentSchema } from "@/lib/validation/agents";
 import { compactLocalized, compactSeoFields, publishingFieldsSchema, optionalLocalizedTextSchema } from "@/lib/validation/shared";
 import { formLocalized, formSeo } from "@/lib/admin/form-values";
-import { uploadMediaFile } from "@/lib/media/uploadMediaFile";
+import { attachPendingMedia } from "@/lib/media/attachPendingMedia";
 import { slugFromTitle } from "@/lib/format/slug";
 import { AdminStickyActions } from "@/components/admin/admin-sticky-actions";
 import { Input } from "@/components/ui/input";
@@ -203,14 +203,7 @@ function AgentFormFields(props: AgentFormProps) {
       } else {
         const id = await createAgent(payload);
         if (pendingPhoto.length > 0) {
-          const results = await Promise.allSettled(
-            pendingPhoto.map(async (pending) => {
-              const uploaded = await uploadMediaFile(pending.file, "agent", id);
-              await createMediaItem({ entityType: "agent", entityId: id, ...uploaded });
-              URL.revokeObjectURL(pending.previewUrl);
-            }),
-          );
-          const failedCount = results.filter((result) => result.status === "rejected").length;
+          const failedCount = await attachPendingMedia(pendingPhoto, "agent", id, createMediaItem);
           if (failedCount > 0) {
             toast.warning("Agent created, but the photo failed to upload — add it from the edit page.");
           } else {

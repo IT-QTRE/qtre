@@ -13,7 +13,7 @@ import { communitySchema } from "@/lib/validation/communities";
 import { compactLocalized, compactSeoFields, publishingFieldsSchema, optionalLocalizedTextSchema } from "@/lib/validation/shared";
 import { formLocalized, formSeo } from "@/lib/admin/form-values";
 import { communityHasLocaleCopy, communityPublishNotes } from "@/lib/admin/community-publish";
-import { uploadMediaFile } from "@/lib/media/uploadMediaFile";
+import { attachPendingMedia } from "@/lib/media/attachPendingMedia";
 import { slugFromTitle } from "@/lib/format/slug";
 import { AdminStickyActions } from "@/components/admin/admin-sticky-actions";
 import { Input } from "@/components/ui/input";
@@ -185,14 +185,7 @@ function CommunityFormFields(props: CommunityFormProps) {
       } else {
         const id = await createCommunity(payload);
         if (pendingHeroImage.length > 0) {
-          const results = await Promise.allSettled(
-            pendingHeroImage.map(async (pending) => {
-              const uploaded = await uploadMediaFile(pending.file, "community", id);
-              await createMediaItem({ entityType: "community", entityId: id, ...uploaded });
-              URL.revokeObjectURL(pending.previewUrl);
-            }),
-          );
-          const failedCount = results.filter((result) => result.status === "rejected").length;
+          const failedCount = await attachPendingMedia(pendingHeroImage, "community", id, createMediaItem);
           if (failedCount > 0) {
             toast.warning("Community created, but the photo failed to upload — add it from the edit page.");
           } else {

@@ -17,7 +17,7 @@ import {
   PROPERTY_TYPE_OPTIONS,
   RENTAL_PERIOD_OPTIONS,
 } from "@/lib/constants/property-attributes";
-import { uploadMediaFile } from "@/lib/media/uploadMediaFile";
+import { attachPendingMedia } from "@/lib/media/attachPendingMedia";
 import { slugFromTitle } from "@/lib/format/slug";
 import { digitsOnly } from "@/lib/format/grouped-number";
 import { cn } from "@/lib/utils";
@@ -328,14 +328,7 @@ function PropertyFormFields(props: PropertyFormProps) {
       } else {
         const id = await createProperty(payload);
         if (pendingPhotos.length > 0) {
-          const results = await Promise.allSettled(
-            pendingPhotos.map(async (pending) => {
-              const uploaded = await uploadMediaFile(pending.file, "property", id);
-              await createMediaItem({ entityType: "property", entityId: id, ...uploaded });
-              URL.revokeObjectURL(pending.previewUrl);
-            }),
-          );
-          const failedCount = results.filter((result) => result.status === "rejected").length;
+          const failedCount = await attachPendingMedia(pendingPhotos, "property", id, createMediaItem);
           if (failedCount > 0) {
             toast.warning(`Property created, but ${failedCount} photo(s) failed to upload — add them from the edit page.`);
           } else {

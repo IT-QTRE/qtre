@@ -12,7 +12,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { developerSchema } from "@/lib/validation/developers";
 import { compactLocalized, compactSeoFields, publishingFieldsSchema, optionalLocalizedTextSchema } from "@/lib/validation/shared";
 import { formLocalized, formSeo } from "@/lib/admin/form-values";
-import { uploadMediaFile } from "@/lib/media/uploadMediaFile";
+import { attachPendingMedia } from "@/lib/media/attachPendingMedia";
 import { slugFromTitle } from "@/lib/format/slug";
 import { AdminStickyActions } from "@/components/admin/admin-sticky-actions";
 import { Input } from "@/components/ui/input";
@@ -193,14 +193,7 @@ function DeveloperFormFields(props: DeveloperFormProps) {
       } else {
         const id = await createDeveloper(payload);
         if (pendingLogo.length > 0) {
-          const results = await Promise.allSettled(
-            pendingLogo.map(async (pending) => {
-              const uploaded = await uploadMediaFile(pending.file, "developer", id);
-              await createMediaItem({ entityType: "developer", entityId: id, ...uploaded });
-              URL.revokeObjectURL(pending.previewUrl);
-            }),
-          );
-          const failedCount = results.filter((result) => result.status === "rejected").length;
+          const failedCount = await attachPendingMedia(pendingLogo, "developer", id, createMediaItem);
           if (failedCount > 0) {
             toast.warning("Developer created, but the logo failed to upload — add it from the edit page.");
           } else {

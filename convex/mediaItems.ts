@@ -93,6 +93,7 @@ export const create = mutation({
     alt: v.optional(localizedTextValidator),
     width: v.optional(v.number()),
     height: v.optional(v.number()),
+    order: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await assertCanWriteMedia(ctx, "create", args.entityType, args.entityId);
@@ -112,9 +113,10 @@ export const create = mutation({
       .withIndex("by_entity", (q) => q.eq("entityType", args.entityType).eq("entityId", args.entityId))
       .order("desc")
       .first();
-    const order = last ? last.order + 1 : 0;
+    const { order: requestedOrder, ...fields } = args;
+    const order = requestedOrder ?? (last ? last.order + 1 : 0);
 
-    return await ctx.db.insert("mediaItems", { ...args, order });
+    return await ctx.db.insert("mediaItems", { ...fields, order });
   },
 });
 

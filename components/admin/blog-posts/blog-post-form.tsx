@@ -12,7 +12,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { blogPostSchema, compactRelated, compactTopicName, RELATED_MAX } from "@/lib/validation/blogPosts";
 import { compactSeoFields, publishingFieldsSchema } from "@/lib/validation/shared";
 import { formLocalized, formSeo } from "@/lib/admin/form-values";
-import { uploadMediaFile } from "@/lib/media/uploadMediaFile";
+import { attachPendingMedia } from "@/lib/media/attachPendingMedia";
 import { slugFromTitle } from "@/lib/format/slug";
 import { AdminStickyActions } from "@/components/admin/admin-sticky-actions";
 import { Input } from "@/components/ui/input";
@@ -242,14 +242,7 @@ function BlogPostFormFields(props: BlogPostFormProps) {
           ...(payload.related.length > 0 ? { related: payload.related } : {}),
         });
         if (pendingCover.length > 0) {
-          const results = await Promise.allSettled(
-            pendingCover.map(async (pending) => {
-              const uploaded = await uploadMediaFile(pending.file, "blogPost", id);
-              await createMediaItem({ entityType: "blogPost", entityId: id, ...uploaded });
-              URL.revokeObjectURL(pending.previewUrl);
-            }),
-          );
-          const failedCount = results.filter((result) => result.status === "rejected").length;
+          const failedCount = await attachPendingMedia(pendingCover, "blogPost", id, createMediaItem);
           if (failedCount > 0) {
             toast.warning("Post created, but the cover image failed to upload — add it from the edit page.");
           } else {
