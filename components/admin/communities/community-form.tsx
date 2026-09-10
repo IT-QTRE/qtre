@@ -307,7 +307,7 @@ function CommunityFormFields(props: CommunityFormProps) {
           hint={
             props.mode === "edit"
               ? "First photo is the community image. Uploads immediately — drag to reorder."
-              : "First photo is the community image. Photos upload when you save."
+              : "First photo is the community image. Photos upload when you save — drag to set the cover."
           }
         >
           {props.mode === "edit" ? (

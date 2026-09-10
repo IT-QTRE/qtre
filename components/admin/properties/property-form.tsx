@@ -724,7 +724,7 @@ function PropertyFormFields(props: PropertyFormProps) {
           hint={
             props.mode === "edit"
               ? "First photo is the listing image. Uploads immediately — drag to reorder."
-              : "First photo is the listing image. Photos upload when you save."
+              : "First photo is the listing image. Photos upload when you save — drag to set the cover."
           }
         >
           {props.mode === "edit" ? (

@@ -38,7 +38,7 @@ export function MediaImage({ mediaItemId, url, entityType, mimeType, alt, ...ima
       );
     }
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={deliveryUrl} alt={alt} className="h-full w-full object-cover" />;
+    return <img src={deliveryUrl} alt={alt} draggable={false} className="h-full w-full object-cover" />;
   }
-  return <Image src={url} alt={alt} {...imageProps} />;
+  return <Image src={url} alt={alt} {...imageProps} draggable={false} />;
 }
