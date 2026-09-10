@@ -23,7 +23,7 @@ export function ListingReadMore({ text }: { text: string }) {
       <p
         ref={ref}
         className={cn(
-          "max-w-prose text-base leading-relaxed text-pretty whitespace-pre-wrap",
+          "text-base leading-relaxed text-pretty whitespace-pre-wrap",
           expanded ? null : PREVIEW_LINES,
         )}
       >
