@@ -61,7 +61,10 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     getTranslations("nav"),
     fetchPublicQuery(api.publicCatalog.getPublishedPropertyBySlug, { slug }),
     fetchPublicQuery(api.websiteSettings.publicGet, {}),
-    fetchPublicQuery(api.publicCatalog.listSuggestedProperties, { slug }),
+    fetchPublicQuery(api.publicCatalog.listSuggestedProperties, { slug }).catch((error) => {
+      console.error("listSuggestedProperties failed", error);
+      return [];
+    }),
   ]);
   const locale = localeRaw as AppLocale;
   if (!property) notFound();
